@@ -16,7 +16,7 @@ always_allow_html: true
 ---
 
 
-## 2주차 과제
+## Week 2 assignment
 
 ### Question
 
@@ -110,4 +110,8 @@ survdiff(Surv(time, status) ~ cell, data = vets)
 #### Conclusion
 
 According to the ***log-rank test (χ² = 25.4, df = 3, p < 0.001)***, there is a *highly significant difference* in survival among the four cell types.
+
+
+[![View on GitHub](https://img.shields.io/badge/GitHub-Repository-blue?logo=github)](https://github.com/Taenyoung-Lee/assignments/blob/main/survival_analysis/week2/Survival_Analysis_week2_assignment.Rmd)
+
 
