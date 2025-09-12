@@ -1,0 +1,113 @@
+---
+title: "Survival_Analysis_week2"
+author: "202430527 leetaenyoung"
+date: "2025-09-12"
+output:
+  html_document:
+    toc: true
+    toc_depth: 3
+    number_sections: true
+    df_print: paged
+    code_folding: hide
+    theme: united
+fontsize: 11pt
+geometry: margin=1in
+always_allow_html: true
+---
+
+
+## 2주차 과제
+
+### Question
+
+* For the vets.dat data set described in the presentation:
+  * **(a)** Obtain **KM plots** for the two categories of the variable ***cell type 1(1 = large, 0 = other)***. Comment on how the **two curves compare** with each other. Carry out the **log-rank**, and draw **conclusions** from the test(s).
+  * **(b)** Obtain **KM plots** for the four categories of ***cell type-large, adeno, small and squamous***. Note that you will need to *recode the data* to define a single variable which numerically distinguishes the four categories *(e.g. 1=large, 2=adeno, etc.)*. As in part a, **compare the four KM curves**. Also carry out the **log-rank** for the equality of the four curves and draw **conclusions**.
+
+#### Data import
+
+```{r import-data}
+vets <- read.table("vets.txt", header = TRUE)
+```
+
+#### Data exploration
+
+![Data explanation](vets.png)
+
+
+```{r}
+# include null?
+sum(is.na(vets))
+# how it looks like?
+head(vets, 3)
+tail(vets, 3)
+# unique variable?
+sapply(vets, function(x) length(unique(x)))
+# what value?
+sapply(vets[,1:5], function(x) unique(x))
+sapply(vets[,10:ncol(vets)], function(x) unique(x))
+# summary
+summary(vets[,6:9])
+```
+
+#### pre-processing
+
+```{r data-preprocessing}
+# integrate 4 level CT into one factor column(cell)
+vets$cell <- ifelse(vets$CT1 == 1, "large",
+              ifelse(vets$CT2 == 1, "adeno",
+              ifelse(vets$CT3 == 1, "small",
+                     "squamous")))
+vets$cell <- factor(vets$cell,
+                     levels = c("large", "adeno", "small", "squamous"))
+
+```
+
+
+### (a)
+
+#### Data seperation (large <-> other)
+
+```{r data seperation}
+vets$large_vs_other <- ifelse(vets$cell == "large", "large", "other")
+```
+
+#### Obtain KM plots
+
+```{r import-library}
+library(survival)
+```
+
+```{r obtain-2plot-logrank}
+fit <- survfit(Surv(time, status) ~ large_vs_other, data = vets)
+
+plot(fit, col = c("red", "blue"), lwd = 2,
+     xlab = "Time (days)", ylab = "Survival probability")
+legend("topright", legend = levels(factor(vets$large_vs_other)),
+       col = c("red","blue"), lwd = 2)
+
+survdiff(Surv(time, status) ~ large_vs_other, data = vets)
+```
+#### Conclusion
+
+According to the ***log-rank test (χ² = 3, df = 1, p = 0.08)***, there is *no significant difference* in survival between the two groups.
+
+
+
+### (b)
+
+```{r obtain-4plot-logrank}
+fit <- survfit(Surv(time, status) ~ cell, data = vets)
+
+plot(fit, col = 1:4, lwd = 2,
+     xlab = "Time (days)", ylab = "Survival probability")
+legend("topright", legend = levels(vets$cell),
+       col = 1:4, lwd = 2)
+
+survdiff(Surv(time, status) ~ cell, data = vets)
+```
+
+#### Conclusion
+
+According to the ***log-rank test (χ² = 25.4, df = 3, p < 0.001)***, there is a *highly significant difference* in survival among the four cell types.
+
