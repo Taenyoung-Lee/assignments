@@ -1,4 +1,4 @@
-This is pdfTeX, Version 3.141592653-2.6-1.40.26 (TeX Live 2025/dev/Debian) (preloaded format=pdflatex 2025.8.27)  15 SEP 2025 14:18
+This is pdfTeX, Version 3.141592653-2.6-1.40.26 (TeX Live 2025/dev/Debian) (preloaded format=pdflatex 2025.8.27)  15 SEP 2025 14:42
 entering extended mode
  restricted \write18 enabled.
  file:line:error style messages enabled.
@@ -23,6 +23,13 @@ File: size12.clo 2024/06/29 v1.4n Standard LaTeX file (size option)
 \abovecaptionskip=\skip49
 \belowcaptionskip=\skip50
 \bibindent=\dimen141
+) (/usr/share/texlive/texmf-dist/tex/latex/tools/bm.sty
+Package: bm 2023/12/19 v1.2f Bold Symbol Support (DPC/FMi)
+\symboldoperators=\mathgroup4
+\symboldletters=\mathgroup5
+\symboldsymbols=\mathgroup6
+Package bm Info: No bold for \OMX/cmex/m/n, using \pmb.
+LaTeX Font Info:    Redeclaring math alphabet \mathbf on input line 149.
 ) (/usr/share/texlive/texmf-dist/tex/latex/amsmath/amsmath.sty
 Package: amsmath 2024/11/05 v2.17t AMS math features
 \@mathmargin=\skip51
@@ -36,6 +43,7 @@ File: amsgen.sty 1999/11/30 v2.0 generic functions
 \ex@=\dimen142
 )) (/usr/share/texlive/texmf-dist/tex/latex/amsmath/amsbsy.sty
 Package: amsbsy 1999/11/29 v1.2d Bold Symbols
+LaTeX Info: Redefining \boldsymbol on input line 28.
 \pmbraise@=\dimen143
 ) (/usr/share/texlive/texmf-dist/tex/latex/amsmath/amsopn.sty
 Package: amsopn 2022/04/08 v2.04 operator names
@@ -91,42 +99,44 @@ LaTeX Info: Redefining \] on input line 2954.
 Package: amssymb 2013/01/14 v3.01 AMS font symbols
  (/usr/share/texlive/texmf-dist/tex/latex/amsfonts/amsfonts.sty
 Package: amsfonts 2013/01/14 v3.01 Basic AMSFonts support
-\symAMSa=\mathgroup4
-\symAMSb=\mathgroup5
+\symAMSa=\mathgroup7
+\symAMSb=\mathgroup8
 LaTeX Font Info:    Redeclaring math symbol \hbar on input line 98.
 LaTeX Font Info:    Overwriting math alphabet `\mathfrak' in version `bold'
 (Font)                  U/euf/m/n --> U/euf/b/n on input line 106.
-)) (/usr/share/texlive/texmf-dist/tex/latex/amscls/amsthm.sty
-Package: amsthm 2020/05/29 v2.20.6
-\thm@style=\toks22
-\thm@bodyfont=\toks23
-\thm@headfont=\toks24
-\thm@notefont=\toks25
-\thm@headpunct=\toks26
-\thm@preskip=\skip54
-\thm@postskip=\skip55
-\thm@headsep=\skip56
-\dth@everypar=\toks27
-) (/usr/share/texlive/texmf-dist/tex/latex/tools/bm.sty
-Package: bm 2023/12/19 v1.2f Bold Symbol Support (DPC/FMi)
-\symboldoperators=\mathgroup6
-\symboldletters=\mathgroup7
-\symboldsymbols=\mathgroup8
-Package bm Info: No bold for \OMX/cmex/m/n, using \pmb.
-Package bm Info: No bold for \U/msa/m/n, using \pmb.
-Package bm Info: No bold for \U/msb/m/n, using \pmb.
-LaTeX Font Info:    Redeclaring math alphabet \mathbf on input line 149.
+)) (/usr/share/texlive/texmf-dist/tex/latex/geometry/geometry.sty
+Package: geometry 2020/01/02 v5.9 Page Geometry
+ (/usr/share/texlive/texmf-dist/tex/latex/graphics/keyval.sty
+Package: keyval 2022/05/29 v1.15 key=value parser (DPC)
+\KV@toks@=\toks22
+) (/usr/share/texlive/texmf-dist/tex/generic/iftex/ifvtex.sty
+Package: ifvtex 2019/10/25 v1.7 ifvtex legacy package. Use iftex instead.
+ (/usr/share/texlive/texmf-dist/tex/generic/iftex/iftex.sty
+Package: iftex 2024/12/12 v1.0g TeX engine tests
+))
+\Gm@cnth=\count282
+\Gm@cntv=\count283
+\c@Gm@tempcnt=\count284
+\Gm@bindingoffset=\dimen151
+\Gm@wd@mp=\dimen152
+\Gm@odd@mp=\dimen153
+\Gm@even@mp=\dimen154
+\Gm@layoutwidth=\dimen155
+\Gm@layoutheight=\dimen156
+\Gm@layouthoffset=\dimen157
+\Gm@layoutvoffset=\dimen158
+\Gm@dimlist=\toks23
 ) (/usr/share/texlive/texmf-dist/tex/latex/cjk-ko/kotex.sty
 Package: kotex 2015/04/19 v1.6 Korean TeX (ko.TeX)
  (/usr/share/texlive/texmf-dist/tex/latex/kotex-utf/kotex.cfg) (/usr/share/texlive/texmf-dist/tex/latex/kotex-utf/kotexutf.sty
 Package: kotexutf 2022/06/22 v3.0.0 typesetting UTF-8 Korean documents
  (/usr/share/texlive/texmf-dist/tex/latex/base/inputenc.sty
 Package: inputenc 2024/02/08 v1.3d Input encoding file
-\inpenc@prehook=\toks28
-\inpenc@posthook=\toks29
+\inpenc@prehook=\toks24
+\inpenc@posthook=\toks25
 ) (/usr/share/texlive/texmf-dist/tex/plain/kotex-plain/kotexutf-core.tex
-\unih@ngulpoint=\count282
-\dhucs@emph@raise=\dimen151
+\unih@ngulpoint=\count285
+\dhucs@emph@raise=\dimen159
 )
 Now handling font encoding LUC ...
 ... processing UTF-8 mapping file for font encoding LUC
@@ -178,59 +188,37 @@ File: lucenc.dfu 2007/09/05 UTF-8 support for dhucs
    defining Unicode char U+FF64 (decimal 65380)
    defining Unicode char U+FF65 (decimal 65381)
 )
-\@josa=\count283
-\josatoks=\toks30
+\@josa=\count286
+\josatoks=\toks26
  (/usr/share/texlive/texmf-dist/tex/latex/cjk-ko/kolabels-utf.sty
 Package: kolabels-utf 2015/03/20 v1.5 UTF-8 Hangul item labels
-))) (/usr/share/texlive/texmf-dist/tex/latex/geometry/geometry.sty
-Package: geometry 2020/01/02 v5.9 Page Geometry
- (/usr/share/texlive/texmf-dist/tex/latex/graphics/keyval.sty
-Package: keyval 2022/05/29 v1.15 key=value parser (DPC)
-\KV@toks@=\toks31
-) (/usr/share/texlive/texmf-dist/tex/generic/iftex/ifvtex.sty
-Package: ifvtex 2019/10/25 v1.7 ifvtex legacy package. Use iftex instead.
- (/usr/share/texlive/texmf-dist/tex/generic/iftex/iftex.sty
-Package: iftex 2024/12/12 v1.0g TeX engine tests
-))
-\Gm@cnth=\count284
-\Gm@cntv=\count285
-\c@Gm@tempcnt=\count286
-\Gm@bindingoffset=\dimen152
-\Gm@wd@mp=\dimen153
-\Gm@odd@mp=\dimen154
-\Gm@even@mp=\dimen155
-\Gm@layoutwidth=\dimen156
-\Gm@layoutheight=\dimen157
-\Gm@layouthoffset=\dimen158
-\Gm@layoutvoffset=\dimen159
-\Gm@dimlist=\toks32
-) (/usr/share/texlive/texmf-dist/tex/latex/l3backend/l3backend-pdftex.def
+))) (/usr/share/texlive/texmf-dist/tex/latex/l3backend/l3backend-pdftex.def
 File: l3backend-pdftex.def 2024-05-08 L3 backend support: PDF output (pdfTeX)
 \l__color_backend_stack_int=\count287
 \l__pdf_internal_box=\box54
 ) (./differnce_from_intercept.aux)
 \openout1 = `differnce_from_intercept.aux'.
 
-LaTeX Font Info:    Checking defaults for OML/cmm/m/it on input line 11.
-LaTeX Font Info:    ... okay on input line 11.
-LaTeX Font Info:    Checking defaults for OMS/cmsy/m/n on input line 11.
-LaTeX Font Info:    ... okay on input line 11.
-LaTeX Font Info:    Checking defaults for OT1/cmr/m/n on input line 11.
-LaTeX Font Info:    ... okay on input line 11.
-LaTeX Font Info:    Checking defaults for T1/cmr/m/n on input line 11.
-LaTeX Font Info:    ... okay on input line 11.
-LaTeX Font Info:    Checking defaults for TS1/cmr/m/n on input line 11.
-LaTeX Font Info:    ... okay on input line 11.
-LaTeX Font Info:    Checking defaults for OMX/cmex/m/n on input line 11.
-LaTeX Font Info:    ... okay on input line 11.
-LaTeX Font Info:    Checking defaults for U/cmr/m/n on input line 11.
-LaTeX Font Info:    ... okay on input line 11.
-LaTeX Font Info:    Checking defaults for LUC/nanummj/m/n on input line 11.
-LaTeX Font Info:    Trying to load font information for LUC+nanummj on input line 11.
+LaTeX Font Info:    Checking defaults for OML/cmm/m/it on input line 13.
+LaTeX Font Info:    ... okay on input line 13.
+LaTeX Font Info:    Checking defaults for OMS/cmsy/m/n on input line 13.
+LaTeX Font Info:    ... okay on input line 13.
+LaTeX Font Info:    Checking defaults for OT1/cmr/m/n on input line 13.
+LaTeX Font Info:    ... okay on input line 13.
+LaTeX Font Info:    Checking defaults for T1/cmr/m/n on input line 13.
+LaTeX Font Info:    ... okay on input line 13.
+LaTeX Font Info:    Checking defaults for TS1/cmr/m/n on input line 13.
+LaTeX Font Info:    ... okay on input line 13.
+LaTeX Font Info:    Checking defaults for OMX/cmex/m/n on input line 13.
+LaTeX Font Info:    ... okay on input line 13.
+LaTeX Font Info:    Checking defaults for U/cmr/m/n on input line 13.
+LaTeX Font Info:    ... okay on input line 13.
+LaTeX Font Info:    Checking defaults for LUC/nanummj/m/n on input line 13.
+LaTeX Font Info:    Trying to load font information for LUC+nanummj on input line 13.
  (/usr/share/texlive/texmf-dist/tex/latex/nanumtype1/lucnanummj.fd
 File: lucnanummj.fd 2013/02/12 v0.1 Nanum Myeongjo font definitions
 )
-LaTeX Font Info:    ... okay on input line 11.
+LaTeX Font Info:    ... okay on input line 13.
 
 *geometry* driver: auto-detecting
 *geometry* detected driver: pdftex
@@ -266,59 +254,38 @@ LaTeX Font Info:    ... okay on input line 11.
 * \@reversemarginfalse
 * (1in=72.27pt=25.4mm, 1cm=28.453pt)
 
-LaTeX Font Info:    Trying to load font information for U+msa on input line 12.
+LaTeX Font Info:    Trying to load font information for U+msa on input line 14.
 (/usr/share/texlive/texmf-dist/tex/latex/amsfonts/umsa.fd
 File: umsa.fd 2013/01/14 v3.01 AMS symbols A
 )
-LaTeX Font Info:    Trying to load font information for U+msb on input line 12.
+LaTeX Font Info:    Trying to load font information for U+msb on input line 14.
  (/usr/share/texlive/texmf-dist/tex/latex/amsfonts/umsb.fd
 File: umsb.fd 2013/01/14 v3.01 AMS symbols B
 )
-LaTeX Font Info:    Font shape `LUC/nanummj/m/it' in size <12> not available
-(Font)              Font shape `LUC/nanummj/m/sl' tried instead on input line 19.
-
 
 [1
 
 {/var/lib/texmf/fonts/map/pdftex/updmap/pdftex.map}]
 
-LaTeX Warning: Reference `thm:eqfit' on page 2 undefined on input line 62.
-
-LaTeX Font Info:    Font shape `OT1/cmtt/bx/n' in size <12> not available
-(Font)              Font shape `OT1/cmtt/m/n' tried instead on input line 79.
-
-
-[2{/usr/share/texmf/fonts/enc/dvips/cm-super/cm-super-ts1.enc}]
-
-LaTeX Warning: Reference `thm:eqfit' on page 3 undefined on input line 122.
-
-
-
-[3]
-
-[4] (./differnce_from_intercept.aux)
+[2{/usr/share/texmf/fonts/enc/dvips/cm-super/cm-super-ts1.enc}] (./differnce_from_intercept.aux)
  ***********
 LaTeX2e <2024-11-01> patch level 2
 L3 programming layer <2025-01-18>
  ***********
-
-
-LaTeX Warning: There were undefined references.
-
  ) 
 Here is how much of TeX's memory you used:
- 3227 strings out of 473197
- 48743 string characters out of 5718605
- 448778 words of memory out of 5000000
- 26351 multiletter control sequences out of 15000+600000
- 625975 words of font info for 265 fonts, out of 8000000 for 9000
+ 3013 strings out of 473197
+ 45150 string characters out of 5718605
+ 441001 words of memory out of 5000000
+ 26182 multiletter control sequences out of 15000+600000
+ 600424 words of font info for 182 fonts, out of 8000000 for 9000
  1141 hyphenation exceptions out of 8191
- 59i,11n,65p,476b,250s stack positions out of 10000i,1000n,20000p,200000b,200000s
-</usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmbx12.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmbx8.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmex10.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cmextra/cmex8.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmmi12.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmmi6.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmmi8.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmmib10.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmr12.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmr17.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmr6.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmr8.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmsy10.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmsy6.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmsy8.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmti12.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmtt12.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/symbols/msbm10.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/nanumtype1/nanummjbac.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/nanumtype1/nanummjbad.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/nanumtype1/nanummjbb2.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/nanumtype1/nanummjbb3.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/nanumtype1/nanummjbb4.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/nanumtype1/nanummjbb5.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/nanumtype1/nanummjbb7.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/nanumtype1/nanummjbb8.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/nanumtype1/nanummjbba.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/nanumtype1/nanummjbbb.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/nanumtype1/nanummjbbc.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/nanumtype1/nanummjbbd.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/nanumtype1/nanummjbbe.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/nanumtype1/nanummjbc0.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/nanumtype1/nanummjbc1.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/nanumtype1/nanummjbc2.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/nanumtype1/nanummjbc5.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/nanumtype1/nanummjbc6.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/nanumtype1/nanummjbc7.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/nanumtype1/nanummjbc8.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/nanumtype1/nanummjbc9.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/nanumtype1/nanummjbcc.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/nanumtype1/nanummjbcf.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/nanumtype1/nanummjbd1.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/nanumtype1/nanummjbd2.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/nanumtype1/nanummjbd3.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/nanumtype1/nanummjbd5.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/nanumtype1/nanummjbd6.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/nanumtype1/nanummjmac.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/nanumtype1/nanummjmac.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/nanumtype1/nanummjmad.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/nanumtype1/nanummjmad.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/nanumtype1/nanummjmae.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/nanumtype1/nanummjmae.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/nanumtype1/nanummjmaf.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/nanumtype1/nanummjmb0.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/nanumtype1/nanummjmb2.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/nanumtype1/nanummjmb2.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/nanumtype1/nanummjmb3.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/nanumtype1/nanummjmb3.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/nanumtype1/nanummjmb4.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/nanumtype1/nanummjmb4.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/nanumtype1/nanummjmb5.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/nanumtype1/nanummjmb5.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/nanumtype1/nanummjmb6.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/nanumtype1/nanummjmb7.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/nanumtype1/nanummjmb7.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/nanumtype1/nanummjmb8.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/nanumtype1/nanummjmb8.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/nanumtype1/nanummjmb9.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/nanumtype1/nanummjmb9.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/nanumtype1/nanummjmba.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/nanumtype1/nanummjmba.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/nanumtype1/nanummjmbb.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/nanumtype1/nanummjmbb.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/nanumtype1/nanummjmbc.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/nanumtype1/nanummjmbc.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/nanumtype1/nanummjmbd.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/nanumtype1/nanummjmbe.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/nanumtype1/nanummjmbf.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/nanumtype1/nanummjmc0.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/nanumtype1/nanummjmc1.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/nanumtype1/nanummjmc2.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/nanumtype1/nanummjmc2.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/nanumtype1/nanummjmc3.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/nanumtype1/nanummjmc4.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/nanumtype1/nanummjmc5.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/nanumtype1/nanummjmc5.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/nanumtype1/nanummjmc6.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/nanumtype1/nanummjmc6.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/nanumtype1/nanummjmc7.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/nanumtype1/nanummjmc7.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/nanumtype1/nanummjmc8.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/nanumtype1/nanummjmc8.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/nanumtype1/nanummjmc9.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/nanumtype1/nanummjmc9.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/nanumtype1/nanummjmcc.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/nanumtype1/nanummjmcd.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/nanumtype1/nanummjmce.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/nanumtype1/nanummjmd0.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/nanumtype1/nanummjmd1.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/nanumtype1/nanummjmd1.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/nanumtype1/nanummjmd2.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/nanumtype1/nanummjmd2.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/nanumtype1/nanummjmd3.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/nanumtype1/nanummjmd3.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/nanumtype1/nanummjmd4.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/nanumtype1/nanummjmd4.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/nanumtype1/nanummjmd5.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/nanumtype1/nanummjmd5.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/nanumtype1/nanummjmd6.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/nanumtype1/nanummjmd6.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/nanumtype1/nanummjmd7.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/nanumtype1/nanummjmd7.pfb></usr/share/texmf/fonts/type1/public/cm-super/sfrm1200.pfb>
-Output written on differnce_from_intercept.pdf (4 pages, 4242034 bytes).
+ 59i,6n,65p,356b,222s stack positions out of 10000i,1000n,20000p,200000b,200000s
+</usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmbx12.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmex10.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmmi12.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmmi8.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmmib10.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmr12.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmr8.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmsy10.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmsy8.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmtt12.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/symbols/msbm10.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/nanumtype1/nanummjbac.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/nanumtype1/nanummjbae.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/nanumtype1/nanummjbb2.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/nanumtype1/nanummjbb3.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/nanumtype1/nanummjbb5.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/nanumtype1/nanummjbb7.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/nanumtype1/nanummjbb9.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/nanumtype1/nanummjbbc.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/nanumtype1/nanummjbc1.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/nanumtype1/nanummjbc2.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/nanumtype1/nanummjbc5.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/nanumtype1/nanummjbc6.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/nanumtype1/nanummjbc7.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/nanumtype1/nanummjbc8.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/nanumtype1/nanummjbc9.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/nanumtype1/nanummjbd0.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/nanumtype1/nanummjbd4.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/nanumtype1/nanummjbd5.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/nanumtype1/nanummjbd6.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/nanumtype1/nanummjmac.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/nanumtype1/nanummjmad.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/nanumtype1/nanummjmae.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/nanumtype1/nanummjmb0.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/nanumtype1/nanummjmb2.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/nanumtype1/nanummjmb3.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/nanumtype1/nanummjmb4.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/nanumtype1/nanummjmb5.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/nanumtype1/nanummjmb7.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/nanumtype1/nanummjmb8.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/nanumtype1/nanummjmb9.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/nanumtype1/nanummjmba.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/nanumtype1/nanummjmbb.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/nanumtype1/nanummjmbc.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/nanumtype1/nanummjmbd.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/nanumtype1/nanummjmbe.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/nanumtype1/nanummjmbf.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/nanumtype1/nanummjmc0.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/nanumtype1/nanummjmc1.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/nanumtype1/nanummjmc2.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/nanumtype1/nanummjmc4.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/nanumtype1/nanummjmc5.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/nanumtype1/nanummjmc6.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/nanumtype1/nanummjmc7.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/nanumtype1/nanummjmc8.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/nanumtype1/nanummjmc9.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/nanumtype1/nanummjmcc.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/nanumtype1/nanummjmcd.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/nanumtype1/nanummjmce.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/nanumtype1/nanummjmd0.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/nanumtype1/nanummjmd3.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/nanumtype1/nanummjmd4.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/nanumtype1/nanummjmd5.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/nanumtype1/nanummjmd6.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/nanumtype1/nanummjmd7.pfb></usr/share/texmf/fonts/type1/public/cm-super/sfrm1200.pfb>
+Output written on differnce_from_intercept.pdf (2 pages, 2339844 bytes).
 PDF statistics:
- 586 PDF objects out of 1000 (max. 8388607)
- 350 compressed objects within 4 object streams
+ 344 PDF objects out of 1000 (max. 8388607)
+ 205 compressed objects within 3 object streams
  0 named destinations out of 1000 (max. 500000)
  1 words of extra memory for PDF output out of 10000 (max. 10000000)
 

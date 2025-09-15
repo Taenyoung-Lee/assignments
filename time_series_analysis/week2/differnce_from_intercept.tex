@@ -1,164 +1,107 @@
 \documentclass[12pt]{article}
-\usepackage{amsmath, amssymb, amsthm, bm, kotex}
+\usepackage{bm}
+\usepackage{amsmath, amssymb} % 수식
 \usepackage{geometry}
+\usepackage{kotex}
+
 \geometry{margin=1in}
 
-\title{왜 \texttt{NOINT}를 쓰면 값이 달라지는가?\\
-\large OLS, 범주형 회귀, 시계열(차분 데이터 포함)}
+\title{지시변수와 연속형 변수가 있을 때 \texttt{NOINT}의 효과}
 \author{}
 \date{}
 
 \begin{document}
 \maketitle
 
-\section{핵심 직관: 설계행렬의 열공간(모형공간)이 달라진다}
-일반 선형회귀에서 관측벡터 $\bm y \in \mathbb{R}^n$, 설계행렬 $X \in \mathbb{R}^{n\times p}$, 오차 $\bm\varepsilon$에 대해
-\[
-\bm y = X\bm\beta + \bm\varepsilon,\qquad \hat{\bm y}=X\hat{\bm\beta} = \underbrace{X(X^\top X)^{-1}X^\top}_{=:H}\bm y
-\]
-이며 $H$는 \emph{모자행렬(hat matrix)}로서 $\mathcal{C}(X)$(열공간) 위로의 직교투영이다.
-\medskip
+\section*{1. 표기와 가정}
 
-절편을 포함하면 $X=[\bm 1\ \ Z]$ (여기서 $\bm 1$은 전부 1인 열벡터), \texttt{NOINT}를 쓰면 $X_0=Z$가 된다.
-따라서 적합값은
+관측이 $t=1,\dots,n$개 있다고 하자. 상태(범주)가 $k$개이며, 각 상태에 대한 지시변수를
 \[
-\hat{\bm y} = P_{\mathcal{C}([\bm 1\ Z])}\bm y,\qquad
-\hat{\bm y}_0 = P_{\mathcal{C}(Z)}\bm y.
+I_j(t) = \mathbf{1}\{\text{state}(t)=j\}, \qquad j=1,\dots,k
 \]
-두 적합값이 같으려면 $\mathcal{C}([\bm 1\ Z])=\mathcal{C}(Z)$여야 한다. 이는 $\bm 1\in\mathcal{C}(Z)$일 때에 한해 성립한다.
+로 두고, 지시행렬을 $D = [\bm d_1, \bm d_2, \dots, \bm d_k]$라 한다.
+모든 관측은 정확히 한 상태에 속한다고 가정한다(one-hot).
 
-$\hat{\bm y}=\hat{\bm y}_0$ (절편 포함/제외의 적합값이 일치) \emph{오직 그 때에만} $\bm 1\in\mathcal{C}(Z)$.
+연속형 설명변수 행렬은 $Z \in \mathbb{R}^{n\times q}$, 상수항은 $\bm 1_n$으로 둔다.
 
+\section*{2. 지시변수만 있을 때}
 
-\begin{proof}
-(만약) $\bm 1\in\mathcal{C}(Z)$이면 $\mathcal{C}([\bm 1\ Z])=\mathcal{C}(Z)$이므로 두 투영이 동일하다.
-(역으로) $\hat{\bm y}=\hat{\bm y}_0$가 모든 $\bm y$에 대해 성립하면 $P_{\mathcal{C}([\bm 1\ Z])}=P_{\mathcal{C}(Z)}$이므로 두 열공간이 같다. 특히 $\bm 1\in\mathcal{C}([\bm 1\ Z])$이므로 $\bm 1\in\mathcal{C}(Z)$.
-\end{proof}
+각 행은 한 열만 $1$이고 나머지는 $0$이므로
+\[
+\bm d_1 + \cdots + \bm d_k = \bm 1_n.
+\]
+따라서 상수항은 이미 $D$의 열공간에 포함된다.
+\[
+\mathcal C([\,\bm 1_n, D_{-k}]) = \mathcal C(D).
+\]
+따라서 절편을 포함하거나 \texttt{NOINT}를 쓰거나 적합값과 자유도는 동일하다.
+차이는 계수 해석뿐이다:
+\[
+\beta_j^{(\text{NOINT})} = \text{셀 평균}, \qquad
+\alpha, \gamma_j = \text{기준 대비 효과}.
+\]
 
-\noindent
-\textbf{결론.} \texttt{NOINT}는 상수방향(평균방향)으로의 투영 자유도를 제거한다. 즉, 일반적으로는 모형공간이 달라져서 \emph{계수와 적합값이 달라진다}. 다만, \emph{특별히} $Z$의 선형결합으로 $\bm 1$을 재현할 수 있으면(예: 특정 범주형 더미구성) 적합값은 동일해질 수 있다.
+\section*{3. 지시변수 + 연속형 변수가 있는 경우}
 
-\section{단순회귀(OLS)에서의 비교: $y=\beta_0+\beta_1 x+\varepsilon$}
-관측쌍 $\{(x_i,y_i)\}_{i=1}^n$에 대해 절편 포함 OLS 추정량은
+설계행렬은
 \[
-\hat\beta_1=\frac{\sum_i (x_i-\bar x)(y_i-\bar y)}{\sum_i (x_i-\bar x)^2}
-=\frac{\operatorname{Cov}(x,y)}{\operatorname{Var}(x)},\qquad
-\hat\beta_0=\bar y-\hat\beta_1\bar x.
+X_{\mathrm{int}} = [\,\bm 1_n \;|\; D_{-k}\;|\; Z\,], \qquad
+X_{\mathrm{no}} = [\,D\;|\;Z\,].
 \]
-반면 \texttt{NOINT}에서의 기울기 추정량은
-\[
-\tilde\beta_1=\frac{\sum_i x_i y_i}{\sum_i x_i^2}.
-\]
-만약 \emph{진짜 모형}이 $y_i=\beta_0+\beta_1 x_i+\varepsilon_i$라면(절편 존재),
-\[
-\tilde\beta_1=\frac{\sum_i x_i(\beta_0+\beta_1 x_i+\varepsilon_i)}{\sum_i x_i^2}
-=\beta_1+\beta_0\frac{\sum_i x_i}{\sum_i x_i^2}+\frac{\sum_i x_i\varepsilon_i}{\sum_i x_i^2}.
-\]
-오차가 $x$와 독립이고 평균 0이면, $X$에 조건부 기대로
-\[
-\mathbb{E}[\tilde\beta_1\mid X]=\beta_1+\beta_0\frac{\sum_i x_i}{\sum_i x_i^2}.
-\]
-즉, $\sum_i x_i=0$ (중심화)인 \emph{특수한 경우}를 제외하면 \texttt{NOINT}의 기울기는 편향된다.
-이는 정리~\ref{thm:eqfit}의 관점에서 $Z=\bm x$의 열공간에 $\bm 1$이 포함되지 않아(대개 그렿다) 모형공간이 달라졌기 때문이다.
-\medskip
 
-또한 \texttt{NOINT} 직선은 원점을 반드시 지난다. 데이터가 원점 근처에 없으면 잔차제곱합(SSE)과 예측오차가 커질 수 있다.
+상수항 $\bm 1_n$은 $D$의 열공간에 속하므로
+\[
+\mathcal C(X_{\mathrm{int}}) = \mathcal C([D, Z]) = \mathcal C(X_{\mathrm{no}}).
+\]
+즉, 적합값과 SSE, 자유도는 동일하다.
+\texttt{NOINT} 모형은 상태별 평균을 직접 계수로 두고,
+절편 포함 모형은 기준 대비 효과와 절편으로 표현한다.
 
-\section{범주형 회귀(더미코딩)에서의 비교}
-수준이 $k$개인 요인 $G\in\{1,\dots,k\}$를 생각하자. 각 수준에 대한 지시벡터를 $n\times k$ 행렬 $D=[\bm d_1,\dots,\bm d_k]$로 두면 언제나
+계수 사이의 대응은
 \[
-\bm d_1+\cdots+\bm d_k=\bm 1.
+\beta_k = \alpha, \qquad
+\beta_j = \alpha + \gamma_j \quad (j=1,\dots,k-1),
 \]
-\subsection*{(1) 단일 요인, 교호작용 없음}
-\paragraph{절편 포함(treatment coding).}
-기준수준을 하나(예: level $k$) 고르고 $D_{-k}=[\bm d_1,\dots,\bm d_{k-1}]$를 쓰면
-\[
-X=[\bm 1\ \ D_{-k}],\qquad \text{열공간 }\mathcal{C}(X)=\mathcal{C}(D).
-\]
-\paragraph{\texttt{NOINT}.}
-모든 더미를 쓰면 $X_0=D$이고 역시 $\mathcal{C}(X_0)=\mathcal{C}(D)$.
-따라서
-\[
-\hat{\bm y}=\hat{\bm y}_0 \quad \text{(적합값 동일)}.
-\]
-즉, \emph{단일 범주형 주효과만 있을 때}는 절편 포함/제외 \emph{모두 동일한 모형공간}을 적합하므로 적합값이 같다. 차이는 \emph{계수의 표기법}뿐이다:
-\[
-\text{(절편 포함) }\ \ 
-\hat\beta_0=\mu_k,\quad
-\hat\beta_j=\mu_j-\mu_k\ (j=1,\dots,k-1);\qquad
-\text{(\texttt{NOINT}) }\ \
-\tilde\gamma_j=\mu_j\ (j=1,\dots,k),
-\]
-여기서 $\mu_j$는 각 수준의 표본평균이다.
+그리고 $Z$의 계수는 두 모형에서 동일하다.
 
-\subsection*{(2) 복수 요인, 교호작용 없음 (가산모형)}
-두 요인 $A$($k_A$수준), $B$($k_B$수준)에 대해 $y\sim A+B$를 보자.
+\section*{4. 자유도와 랭크}
+
+잔차 자유도는
+\[
+\mathrm{df} = n - \operatorname{rank}(X).
+\]
+$D$가 완전(one-hot)이라면 $\operatorname{rank}(D)=k$이고,
+두 모형 모두 랭크가
+\[
+k + \operatorname{rank}\big((I - P_D)Z\big)
+\]
+이므로 df도 같다.
+
+\section*{5. 시계열 맥락에서의 해석}
+
 \begin{itemize}
-\item 절편 포함: $X=[\bm 1\ \ D_A^{(-)}\ \ D_B^{(-)}]$로 열 수는 $1+(k_A-1)+(k_B-1)$.
-\item \texttt{NOINT}: $X_0=[D_A\ \ D_B]$로 열 수는 $k_A+k_B$이나,
-\[
-\underbrace{\bm 1}_{=\sum \text{(A-더미)}}=\underbrace{\sum \text{(B-더미)}}_{\text{또한 }\bm 1}
-\]
-때문에 \emph{정확히 한 개}의 선형의존이 존재하여 $\operatorname{rank}(X_0)=k_A+k_B-1$.
+\item \textbf{지시변수만 있는 경우:} 계절 더미나 구간 효과 모형에서 \texttt{NOINT}는 각 구간 평균을 직접 추정한다. 적합값, SSE, df가 모두 동일.
+\item \textbf{지시 + 연속형 변수:} 지시행렬이 완전하면, 연속형 변수가 있더라도 설계공간은 같고 결과는 동일하다. 다만, 계수 해석은 ``상태별 절편'' vs ``기준대비 효과''로 달라진다.
 \end{itemize}
-두 경우 모두 열공간은 동일하게 $k_A+k_B-1$차원이므로 적합값이 \emph{동일}하다. 다시 말해,
-\[
-P_{\mathcal{C}([\bm 1\ D_A^{(-)}\ D_B^{(-)}])}
-=
-P_{\mathcal{C}([D_A\ D_B])}.
-\]
-다만 계수 해석은 달라진다(기준수준 대비 효과 vs 수준 자체 효과 + \emph{합=0} 제약 등).
 
-\subsection*{(3) 교호작용 포함 (포화모형/셀평균)}
-요인 $A,B$의 교호작용을 포함하면 $A\times B$의 각 셀에 대한 지시열이 생긴다.
+\section*{6. 주의할 점}
+
+적합값이 동일하다는 결론은 다음이 만족될 때만 성립한다.
 \begin{itemize}
-\item 절편 포함: 주효과와 교호작용을 합치면 열공간이 전체 셀평균공간과 일치한다.
-\item \texttt{NOINT}: 각 셀 더미만으로도 동일한 공간을 생성한다.
+\item 지시행렬이 완전(one-hot)이어야 함.
+\item \texttt{NOINT} 모형에서 지시열을 빠뜨리지 않아야 함.
+\item 오차 구조가 동일해야 함(예: OLS).
 \end{itemize}
-따라서 포화모형에서는 적합값이 동일하며, 특히 \texttt{NOINT}일 때 각 셀의 회귀계수는 그 셀의 평균과 일치한다.
+이 중 하나라도 깨지면, 두 모형의 설계공간이 달라지고
+적합값, SSE, 자유도가 달라질 수 있다.
 
-\section{왜 시계열에서는 보통 달라지는가?}
-시계열 회귀에서 $Z$가 시차항(예: $y_{t-1},y_{t-2},\dots$)이나 추세 $t$ 등으로만 구성되면 일반적으로 $\bm 1\notin\mathcal{C}(Z)$이다.
-따라서 정리~\ref{thm:eqfit}에 의해 절편 포함/제외의 적합값이 달라진다.
-예를 들어 AR(1) 모형
-\[
-y_t=c+\phi y_{t-1}+\varepsilon_t
-\]
-에서 \texttt{NOINT}는 $c=0$을 강제하여 과정의 평균을 $0$으로 제한한다:
-\[
-\mathbb{E}[y_t]=\frac{c}{1-\phi}\quad\longrightarrow\quad 0.
-\]
-이는 데이터의 수준(level)을 설명할 자유도를 제거하는 효과다.
+\section*{7. 요약}
 
-\subsection*{차분된(differenced) 자료의 특수성}
-원시계열 $\{Y_t\}$를 1차 차분하면
-\[
-\Delta Y_t = Y_t - Y_{t-1},
-\]
-그 기댓값은
-\[
-\mathbb{E}[\Delta Y_t]
-   = \mathbb{E}[Y_t] - \mathbb{E}[Y_{t-1}] = 0.
-\]
-즉, 차분 자료는 이론적으로 평균이 0이다.
-이 경우 절편을 포함해도 추정치가 거의 0이 되므로,
-\texttt{NOINT}와 절편 포함 모형의 적합값은 동일하거나
-수치 오차 수준의 미세한 차이만 난다.
-\medskip
-
-실무에서 차분 후 회귀(예: ARIMA의 AR 부분)를 적합할 때
-평균이 정확히 0임을 알고 있다면
-\texttt{NOINT}를 지정해 자유도를 절약할 수 있다.
-그러나 표본평균이 0에서 크게 벗어나면
-작은 절편을 허용하는 편이 안전하다.
-
-\section{실무적 요약}
 \begin{itemize}
-\item \textbf{일반 OLS(연속형 공변량):} 대개 $\bm 1\notin\mathcal{C}(Z)$이므로 \texttt{NOINT}는 \emph{적합값과 계수}를 바꾼다. $x$를 중심화하면 일부 효과(기울기 편향) 완화 가능.
-\item \textbf{범주형 주효과(가산):} 절편 유무와 무관하게 \emph{적합값은 동일}. 차이는 \emph{계수의 파라미터화}와 해석.
-\item \textbf{교호작용(포화):} 적합값 동일. \texttt{NOINT}에서는 계수가 곧 셀평균.
-\item \textbf{시계열(수준 포함):} 절편은 평균수준을 설명한다. \texttt{NOINT}는 평균을 0으로 고정.
-\item \textbf{차분 자료:} 평균이 이론적으로 0이므로 절편 유무가 결과에 거의 영향을 주지 않는다.
+\item 지시변수만 있을 때: \texttt{NOINT} 여부는 적합값에 영향을 주지 않는다.
+\item 지시 + 연속형 변수가 함께 있어도, 지시행렬이 완전하면 결과는 동일하며,
+      해석(계수 표현)만 다르다.
+\item 지시행렬이 완전하지 않거나 일부 열을 제거하면 결과가 달라질 수 있다.
 \end{itemize}
 
 \end{document}
