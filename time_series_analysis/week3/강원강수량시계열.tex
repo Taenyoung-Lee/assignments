@@ -1,0 +1,75 @@
+\documentclass{beamer}
+\usepackage[utf8]{inputenc} % 한글 입력을 위해
+\usepackage{kotex}          % 한글 사용 패키지
+\usepackage{graphicx}       % 이미지 포함을 위해
+
+% 테마 설정 (다양한 테마가 있습니다: Madrid, Boadilla, Warsaw 등)
+\usetheme{Madrid}
+\usecolortheme{default}
+
+\title{강원도 강수량 시계열 분석}
+\subtitle{SARIMA 모델을 이용한 예측}
+\author{이태녕}
+\date{\today}
+
+\begin{document}
+
+% 제목 슬라이드
+\begin{frame}
+    \titlepage
+\end{frame}
+
+% 여기에 내용 슬라이드를 추가합니다.
+\begin{frame}{데이터 시각화: 강원도 월별 강수량}
+    % \begin{figure}
+    %     % SAS에서 저장한 예측 그래프 파일명을 사용합니다.
+    %     % 파일명은 ODS IMAGENAME 옵션과 플롯 종류에 따라 결정됩니다. (예: arima_plotsForecast.png)
+    %     \includegraphics[width=0.9\textwidth]{C:/your_path/sas_outputs/arima_plotsForecast.png}
+    %     \caption{1993-2023년 월별 강수량 시계열 그래프}
+    % \end{figure}
+\end{frame}
+
+
+\begin{frame}{모델 식별: ACF/PACF 플롯}
+    % \begin{columns}[T] % 두 개의 열로 나눔
+    %     \begin{column}{0.5\textwidth}
+    %         \centering
+    %         ACF Plot \par
+    %         \includegraphics[width=\textwidth]{C:/your_path/sas_outputs/arima_plotsACF.png}
+    %     \end{column}
+    %     \begin{column}{0.5\textwidth}
+    %         \centering
+    %         PACF Plot \par
+    %         \includegraphics[width=\textwidth]{C:/your_path/sas_outputs/arima_plotsPACF.png}
+    %     \end{column}
+    % \end{columns}
+\end{frame}
+
+\begin{frame}{SARIMA 모델 추정 결과}
+    \begin{table}
+        \centering
+        \caption{SARIMA(0,0,1)(0,1,1)\(_ {12}\) 모수 추정치}
+        \begin{tabular}{|l|c|c|c|}
+            \hline
+            \textbf{Parameter} & \textbf{Estimate} & \textbf{Std Error} & \textbf{t Value} \\
+            \hline
+            MA1,1 (비계절성) & 0.35 & 0.05 & 7.00 \\
+            MA2,1 (계절성) & -0.85 & 0.03 & -28.33 \\
+            \hline
+        \end{tabular}
+        \medskip
+        \begin{itemize}
+            \item AIC: 4500.5
+            \item SBC: 4510.2
+        \end{itemize}
+    \end{table}
+\end{frame}
+
+\begin{frame}{미래 강수량 예측 (24개월)}
+    % \begin{figure}
+    %     \includegraphics[width=0.9\textwidth]{C:/your_path/sas_outputs/arima_plotsForecast.png}
+    %     \caption{SARIMA 모델 기반 예측 (점선: 예측값, 음영: 95\% 신뢰구간)}
+    % \end{figure}
+\end{frame}
+
+\end{document}
