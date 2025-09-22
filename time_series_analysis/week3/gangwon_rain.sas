@@ -5,13 +5,14 @@ PROC IMPORT DATAFILE="/home/u64002670/time_series/kangwon_rain.xlsx"
     REPLACE;
     GETNAMES=YES; 
 RUN;
+proc print data=work.rain(obs=5); run;
 
 DATA rain_ts;
     SET work.rain;
     
     MONTH = INPUT(COMPRESS(월별, '월'), 8.);
     
-    DATE = MDY(MONTH, 1, 시점);
+    DATE = MDY(MONTH, 1, 연도);
     
     FORMAT DATE YYMMDD10.;
     
@@ -29,6 +30,8 @@ PROC SGPLOT DATA=rain_ts;
     YAXIS LABEL="강수량 (mm)";
 RUN;
 
+proc print data=rain_ts(obs=5); run;
+
 
 PROC ARIMA DATA=rain_ts;
     /*원본 데이터의 정상성 확인*/
@@ -36,6 +39,11 @@ PROC ARIMA DATA=rain_ts;
     TITLE "원본 데이터 ACF/PACF";
 RUN;
 
+/*--------------------------------------------------------------------*/
+/*--------------------------------------------------------------------*/
+/*--------------------------------------------------------------------*/
+/*--------------------------------------------------------------------*/
+/*--------------------------------------------------------------------*/
 PROC ARIMA DATA=rain_ts;
     IDENTIFY VAR=전체(1);
     TITLE "1차 차분 데이터 ACF/PACF";
