@@ -1,0 +1,340 @@
+---
+title: "Survival_Analysis_week2"
+author: "202430527 leetaenyoung"
+date: "2025-09-28"
+output:
+  html_document:
+    toc: true
+    toc_depth: 3
+    number_sections: true
+    toc_float: true
+    df_print: paged
+    code_folding: hide
+    theme: readable
+fontsize: 11pt
+geometry: margin=1in
+always_allow_html: true
+---
+
+
+## Week 3 assignment
+
+### Question 1
+
+#### Data-Library import
+
+```{r import-data;library}
+library(survival)
+vets <- read.table("vets.txt", header = TRUE)
+```
+
+#### pre-processing
+
+```{r data-preprocessing}
+# integrate 4 level CT into one factor column(cell)
+vets$cell <- ifelse(vets$CT1 == 1, "large",
+              ifelse(vets$CT2 == 1, "adeno",
+              ifelse(vets$CT3 == 1, "small",
+                     "squamous")))
+vets$cell <- factor(vets$cell,
+                     levels = c("large", "adeno", "small", "squamous"))
+
+# 치료: 1=standard, 2=test; test=1, standard=0로 인코딩
+vets$TrtTest <- as.integer(vets$Trt == 2)
+
+```
+
+
+#### (a)
+
+***Cox-PH model*** : 
+\[
+h(t\mid \mathbf{x}) \;=\; h_0(t)\,\exp\!\big(
+\beta_{\text{Trt}}\cdot \text{Treatment}
++ \beta_{\text{A}}\cdot I\{\text{Adeno}\}
++ \beta_{\text{S}}\cdot I\{\text{Small}\}
++ \beta_{\text{Q}}\cdot I\{\text{Squamous}\}
++ \beta_{\text{PS}}\cdot \text{PerfStatus}
++ \beta_{\text{DD}}\cdot \text{DiseaseDur}
++ \beta_{\text{Age}}\cdot \text{Age}
++ \beta_{\text{PT}}\cdot \text{PriorTherapy}
+\big),
+\]
+
+```{r a}
+# 1) Cox PH fit
+fit <- coxph(
+  Surv(time, status) ~ TrtTest + cell + PS + DD + age + PT,
+  data = vets
+)
+summary(fit)
+
+#문제 스타일 표 만들기
+co <- coef(fit)
+se <- sqrt(diag(vcov(fit)))
+z  <- co / se
+p  <- 2 * pnorm(-abs(z))
+hr <- exp(co)
+ci <- exp(cbind(lwr = co - 1.96 * se, upr = co + 1.96 * se))
+
+out <- data.frame(
+  term = names(co),
+  coef = round(co, 3),
+  se   = round(se, 3),
+  z    = round(z, 3),
+  p    = signif(p, 3),
+  HR   = round(hr, 3),
+  CI95 = sprintf("(%.3f, %.3f)", ci[,1], ci[,2]),
+  row.names = NULL
+)
+out
+```
+
+#### (b)
+
+For Adeno versus Large cell type,
+\[
+\mathrm{HR} = \exp(\beta_{\text{A}}).
+\]
+From the estimates, $\hat\beta_{\text{A}}=0.795$, hence
+\[
+\widehat{\mathrm{HR}}_{\text{Adeno vs Large}}
+= \exp(0.795) \approx 2.214.
+\]
+
+#### (c)
+
+Comparing Adeno and Squamous cell types,
+\[
+\mathrm{HR} = \exp(\beta_{\text{A}} - \beta_{\text{Q}}).
+\]
+From the estimates, $\hat\beta_{\text{A}}=0.795$ and $\hat\beta_{\text{Q}}=-0.401$,
+\[
+\widehat{\mathrm{HR}}_{\text{Adeno vs Squamous}}
+= \exp(0.795 - (-0.401)) = \exp(1.196) \approx 3.31.
+\]
+
+#### (d)
+
+The treatment coefficient is $\hat\beta_{\text{Trt}}=0.295$ with $p=0.156$, giving
+\[
+\widehat{\mathrm{HR}} = \exp(0.295) \approx 1.34,\quad 95\%~\mathrm{CI}:\;(0.89,\;2.0).
+\]
+Because $p>0.05$ and the CI includes 1, there is no significant treatment effect at the 5\% level.
+
+
+#### (e)
+
+For a patient with Test treatment and Squamous cell type,
+\[
+\eta \;=\; \hat\beta_{\text{Trt}}\cdot 1
++ \hat\beta_{\text{Q}}\cdot 1
++ \hat\beta_{\text{PS}}\cdot \text{PS}
++ \hat\beta_{\text{DD}}\cdot \text{DD}
++ \hat\beta_{\text{Age}}\cdot \text{Age}
++ \hat\beta_{\text{PT}}\cdot \text{PT}.
+\]
+The estimated survival function is
+\[
+\widehat{S}(t\mid \mathbf{x})
+= \widehat{S}_0(t)^{\exp(\eta)},
+\]
+where $\widehat{S}_0(t)$ is the estimated baseline survival.
+
+```{r e}
+PS_  <- mean(vets$PS,  na.rm = TRUE)
+DD_  <- mean(vets$DD,  na.rm = TRUE)
+age_ <- mean(vets$age, na.rm = TRUE)
+PT_  <- mean(vets$PT,  na.rm = TRUE)
+
+nd <- data.frame(
+  TrtTest = 1L,  # Test
+  cell    = factor("squamous", levels = levels(vets$cell)),
+  PS  = PS_,
+  DD  = DD_,
+  age = age_,
+  PT  = PT_
+)
+
+sf <- survfit(fit, newdata = nd)
+
+plot(
+  sf,
+  xlab = "Days", ylab = "Survival probability",
+  main = "Estimated Survival: Test + Squamous (PS,DD,age,PT adjusted)",
+  mark.time = TRUE, lwd = 2
+)
+grid()
+```
+
+---
+
+### Question 2
+
+#### Data-Library import
+
+```{r import-q2data;library}
+library(survival)
+remission <- read.table("remission.txt", header = TRUE)
+```
+
+
+#### pre-processing
+
+```{r q2data-preprocessing}
+colnames(remission) <- c("time", "status", "Rx", "sex", "logWBC")
+```
+
+#### Model
+
+```{r q2-model}
+cox1 <- coxph(Surv(time, status) ~ Rx + sex + logWBC + Rx:sex + Rx:logWBC, data = remission)
+cox2 <- coxph(Surv(time, status) ~ Rx + sex + logWBC + Rx:sex, data = remission)
+cox3 <- coxph(Surv(time, status) ~ Rx + sex + Rx:sex, data = remission)
+cox4 <- coxph(Surv(time, status) ~ Rx + sex + logWBC, data = remission)
+```
+##### Model summary
+
+```{r summary-model}
+models <- list(Model1 = cox1, Model2 = cox2, Model3 = cox3, Model4 = cox4)
+
+out2 <- lapply(models, function(m) {
+  s <- summary(m)
+  data.frame(
+    Variable = rownames(s$coefficients),
+    Coef     = s$coefficients[, "coef"],
+    StdErr   = s$coefficients[, "se(coef)"],
+    p.value  = s$coefficients[, "Pr(>|z|)"],
+    HR       = exp(s$coefficients[, "coef"]),
+    CI.lower = exp(s$conf.int[, "lower .95"]),
+    CI.upper = exp(s$conf.int[, "upper .95"])
+  )
+})
+out2
+```
+
+
+#### (a)
+
+Compare Model 1 (5 df) and Model 4 (3 df):  
+\[
+\Delta G^2 = 52.75 - 47.19 = 5.56,\;\; df=2,\;\; p \approx 0.06.
+\]
+Not significant at 5\%.  
+\textbf{Conclusion:} both interactions are not needed.
+
+
+#### (b)
+
+Compare Model 1 and Model 2:  
+\[
+\Delta G^2 = 0.03,\;\; df=1,\;\; p \approx 0.86.
+\]
+No gain by adding Rx:logWBC.  
+\textbf{Better: Model 2.}
+
+#### (c)
+
+Model 2: 
+\[
+HR_{Rx|sex} = \exp(\beta_{Rx} + \beta_{Rx:sex}\cdot sex).
+\]
+
+
+#### (d)
+
+From Model 2 estimates: $\beta_{Rx}=0.4752$, $\beta_{Rx:sex}=2.1032$.
+\[
+HR_{\text{male}} = \exp(0.4752) = 1.61,
+\]
+\[
+HR_{\text{female}} = \exp(0.4752+2.1032) = 13.18.
+\]
+\textbf{Effect is much stronger in females.}
+
+
+#### (e)
+
+logWBC is significant ($p<0.001$).  
+Removing logWBC (Model 3) lowers fit and changes estimates.  
+\textbf{Better: keep logWBC (Model 2).}
+
+
+#### (f)
+
+***Model 2***
+
+---
+
+### Question 3
+
+#### Data-Library import
+
+```{r import-q3data;library}
+library(survival)
+head(aml)
+```
+
+#### pre-processing
+
+Request by text(coarse time) : 
+
+```{r q3data-preprocessing}
+time.months <- cut(aml$time, breaks = seq(0, 161, 4), labels = FALSE, right = FALSE)
+aml$x_num <- ifelse(aml$x == "Maintained", 1, 0)
+head(aml)
+```
+
+#### Re-Modelling
+
+```{r}
+fit_breslow <- coxph(Surv(time.months, status) ~ x_num, data = aml, ties = "breslow")
+fit_efron   <- coxph(Surv(time.months, status) ~ x_num, data = aml, ties = "efron")
+fit_exact   <- coxph(Surv(time.months, status) ~ x_num, data = aml, ties = "exact")
+```
+
+#### Model Summary
+
+```{r}
+get_cox_summary <- function(fit) {
+  s <- summary(fit)
+  data.frame(
+    ties    = fit$method,
+    term    = "x_num",
+    coef    = s$coefficients["x_num","coef"],
+    se      = s$coefficients["x_num","se(coef)"],
+    z       = s$coefficients["x_num","z"],
+    p       = s$coefficients["x_num","Pr(>|z|)"],
+    HR      = exp(s$coefficients["x_num","coef"]),
+    CI.low  = s$conf.int["x_num","lower .95"],
+    CI.high = s$conf.int["x_num","upper .95"],
+    loglik  = unname(s$loglik[2]),
+    row.names = NULL
+  )
+}
+
+# 세 가지 ties 방법 요약 합치기
+tab <- rbind(
+  get_cox_summary(fit_breslow),
+  get_cox_summary(fit_efron),
+  get_cox_summary(fit_exact)
+)
+
+# exact 계수와 차이 계산
+beta_exact <- tab$coef[tab$ties == "exact"]
+tab$abs_diff_from_exact <- abs(tab$coef - beta_exact)
+print(tab, row.names = FALSE)
+
+```
+
+#### Conclusion
+
+The Efron method is the closest to the exact method
+
+
+---
+---
+
+[![View on GitHub](https://img.shields.io/badge/GitHub-Repository-blue?logo=github)](https://github.com/Taenyoung-Lee/assignments/blob/main/survival_analysis/week3/Survival_Analysis_week3_assignment.Rmd)
+
+
