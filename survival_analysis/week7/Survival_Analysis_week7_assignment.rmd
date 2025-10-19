@@ -135,7 +135,7 @@ exp_high <- data.frame(time = grid, surv = S0_grid^(exp(beta*1)))
 ```
 
 
-### Observed vs Expected (O–E) 누적위험 비교
+### Observed vs Expected (O–E) 비교
 
 ```{r plot2}
 # 그리기: 관측(실선) vs 기대(점선), 군별 색상/라인 구분
@@ -327,9 +327,9 @@ segments(x0 = usr[1], y0 = 0, x1 = usr[2], y1 = 0, lty = 2, col = "gray50")
 
 ```
 
-* OS: Schoenfeld 잔차 검정에서 p=0.61로 PH 가정 위반 증거가 없었다.
+* OS: Schoenfeld 잔차 검정에서 p=0.61로 PH 가정 위반이 아니라고 할수 있습니다.
 
-* RFS: Schoenfeld 잔차 검정에서 p=0.087로 PH 가정 위반 증거가 없었다.
+* RFS: Schoenfeld 잔차 검정에서 p=0.087로 PH 가정 위반이 아니라고 할수 있습니다.
 
 ---
 ---
