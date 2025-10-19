@@ -1,0 +1,339 @@
+---
+title: "Survival_Analysis_week7"
+author: "202430527 leetaenyoung"
+date: "2025-10-19"
+output:
+  html_document:
+    toc: true
+    toc_depth: 3
+    number_sections: true
+    toc_float: true
+    df_print: paged
+    code_folding: hide
+    theme: readable
+fontsize: 11pt
+geometry: margin=1in
+always_allow_html: true
+---
+
+
+# Week 7 assignment
+
+## Question 1. Exercise 7
+
+### Data-Library import
+
+```{r import-data;library1}
+library(survival)
+vets <- read.table("vets.txt", header = TRUE)
+```
+
+### Pre-processing
+
+```{r preprocessing1}
+# 상태(status): 1=사망(사건발생), 0=검열
+# 성능상태(PS): high(>=50) vs low(<50) 이분화
+vets$PS_high <- as.integer(vets$PS >= 50)
+vets$PS_grp  <- factor(vets$PS_high, levels = c(0,1),
+                       labels = c("Low (<50)", "High (≥50)"))
+
+# Surv 객체
+Sobj <- with(vets, Surv(time, status == 1))
+```
+
+
+### (-log{-log S(t)} vs log(time))
+
+```{r plot1}
+# Kaplan–Meier 곡선
+sf <- survfit(Sobj ~ PS_grp, data = vets)
+
+# 데이터프레임 구성: x=시간, y=-log{-log S(t)}
+to_ll <- function(fit, group_name) {
+  eps <- .Machine$double.eps
+  data.frame(
+    group = group_name,
+    time  = fit$time,
+    surv  = fit$surv,
+    x     = pmax(fit$time, 0),          
+    y     = -log(-log(pmax(fit$surv, eps)))  
+  )
+}
+
+get_group_df <- function(sf_obj) {
+  out <- list(); off <- 0
+  for (k in seq_along(sf_obj$strata)) {
+    n   <- sf_obj$strata[k]
+    idx <- seq_len(n) + off
+    gnm <- names(sf_obj$strata)[k]
+    out[[k]] <- to_ll(list(time = sf_obj$time[idx], surv = sf_obj$surv[idx]), gnm)
+    off <- off + n
+  }
+  do.call(rbind, out)
+}
+df_ll <- get_group_df(sf)
+
+# 그리기
+op <- par(no.readonly = TRUE); on.exit(par(op))
+plot(range(df_ll$x), range(df_ll$y), type = "n",
+     xlab = "Time (days)", ylab = "-log{-log S(t)}",
+     main = "Q1: Log–log Survival")
+
+cols <- c("steelblue4", "firebrick3")
+ltys <- c(1, 2)
+grps <- levels(vets$PS_grp)
+for (i in seq_along(grps)) {
+  di <- subset(df_ll, group == paste0("PS_grp=", grps[i]))
+  lines(di$x, di$y, type = "s", col = cols[i], lty = ltys[i], lwd = 2)
+}
+legend("topright", legend = grps, col = cols, lty = ltys, lwd = 2, bty = "n")
+```
+
+### Conclusion
+
+* 두 곡선(High/Low PS)이 전 구간에서 교차 없이 비슷한 모양으로 거의 평행하게 내려갑니다. 따라서 PS에 대해서 PH 가정은 대체로 타당하다고 결론내릴 수 있습니다.
+
+---
+
+## Question 1. Exercise 9
+
+### Pre-processing
+
+```{r preprocessing2}
+
+## 1) PS만 포함한 Cox PH 적합
+fit_ps <- coxph(Sobj ~ PS_high, data = vets)
+beta   <- unname(coef(fit_ps)["PS_high"])
+
+## 2) 베이스라인 누적위험 및 생존함수
+bh <- basehaz(fit_ps, centered = FALSE)     # columns: time, hazard = H0(t)
+S0 <- exp(-bh$hazard)                        # baseline survival S0(t)
+
+## 3) 군별 'Expected' 생존함수: S_exp(t|g) = S0(t)^{exp(beta*g)}
+S_exp_low  <- S0^(exp(beta*0))
+S_exp_high <- S0^(exp(beta*1))
+
+## 4) 군별 'Observed' KM 생존함수
+tmax  <- max(vets$time, na.rm = TRUE)
+grid  <- seq(0, tmax, by = 5)  # 등간격 시간격자
+
+sf <- survfit(Sobj ~ PS_high, data = vets)  # KM (두 군)
+# grid 시점의 군별 KM 생존확률 뽑기
+summ <- summary(sf, times = grid)
+# summary는 두 군 결과가 섞여 오므로 분리
+obs_low  <- data.frame(time = summ$time[summ$strata == "PS_high=0"],
+                       surv = summ$surv [summ$strata == "PS_high=0"])
+obs_high <- data.frame(time = summ$time[summ$strata == "PS_high=1"],
+                       surv = summ$surv [summ$strata == "PS_high=1"])
+
+## 5) Expected도 같은 grid
+S0_grid <- approx(x = bh$time, y = S0, xout = grid, rule = 2, ties = mean)$y
+exp_low  <- data.frame(time = grid, surv = S0_grid^(exp(beta*0)))
+exp_high <- data.frame(time = grid, surv = S0_grid^(exp(beta*1)))
+
+
+```
+
+
+### Observed vs Expected (O–E) 누적위험 비교
+
+```{r plot2}
+# 그리기: 관측(실선) vs 기대(점선), 군별 색상/라인 구분
+op <- par(no.readonly = TRUE); on.exit(par(op))
+plot(c(0, tmax), c(0,1), type="n",
+     xlab="Time (days)", ylab="Survival probability",
+     main="Observed vs Expected Survival by PS - high(≥50) vs low(<50)")
+
+# Observed: 굵은 실선(계단), Expected: 얇은 실선
+# Low (<50)
+lines(obs_low$time,  obs_low$surv,  type="s", lwd=2, col="#210be9")
+lines(exp_low$time,  exp_low$surv,  type="l", lwd=1, col="#210be9")
+
+# High (≥50)
+lines(obs_high$time, obs_high$surv, type="s", lwd=2, col="#e90b0b")
+lines(exp_high$time, exp_high$surv, type="l", lwd=1, col="#e90b0b")
+
+legend("topright",
+       legend = c("Observed (Low)","Expected (Low)","Observed (High)","Expected (High)"),
+       lty = c(1,1,1,1), lwd = c(2,1,2,1),
+       col = c("#210be9","#210be9","#e90b0b","#e90b0b"), bty="n")
+```
+
+### Conclusion
+
+* 각 군(High/Low)별 Observed 생존곡선이 Expected곡선과 전 구간에서 거의 겹치며, High–Low 두 군 사이의 상대적 간격도 시간이 지나도 크게 변하지 않습니다. 따라서 performance status에 대한 PH 가정은 대체로 타당하다고 결론 내릴 수 있습니다.
+
+
+---
+
+
+## Question 2. Problem_Chap4
+
+### Data-Library import
+
+```{r import-data;library3}
+library(survival)
+library(asaur) # For data loading
+# 데이터 로드
+data("hepatoCellular", package = "asaur")
+hc <- hepatoCellular
+```
+
+### Pre-processing
+
+```{r preprocessing3}
+to01 <- function(x) as.integer(as.numeric(x) != 0)
+
+# Surv 객체 생성
+hc$OS_time    <- hc$OS
+hc$OS_status  <- to01(hc$Death)
+hc$RFS_time   <- hc$RFS
+hc$RFS_status <- to01(hc$Recurrence)
+
+S_OS  <- with(hc,  Surv(OS_time,  OS_status))
+S_RFS <- with(hc,  Surv(RFS_time, RFS_status))
+
+cxcl_vars <- c("CXCL17T","CXCL17P","CXCL17N")
+```
+
+#### (a) Cox compare : T/P/N
+
+```{r a}
+safe_cox_one <- function(S, data, var){
+  ok <- complete.cases(S[, "time"], S[, "status"], data[[var]])
+  S2 <- S[ok]; d <- data[ok, , drop=FALSE]
+  # 사건과 변동이 충분한지 확인
+  if (sum(S2[, "status"]==1L)==0L || length(unique(d[[var]]))<2L)
+    return(data.frame(var=var, HR=NA, LCL=NA, UCL=NA, p=NA, LRT=NA, AIC=NA))
+
+  fit0 <- coxph(S2 ~ 1, data=d, ties="efron")
+  fit1 <- coxph(S2 ~ d[[var]], data=d, ties="efron")
+  HR   <- unname(exp(coef(fit1)))
+  CI   <- tryCatch(exp(confint(fit1)), error=function(e) matrix(c(NA,NA),1))
+  s    <- summary(fit1)
+  LRT  <- 2*(fit1$loglik[2]-fit0$loglik[2])
+  AIC  <- -2*fit1$loglik[2] + 2*length(coef(fit1))
+  data.frame(var=var, HR=HR, LCL=CI[1], UCL=CI[2],
+             p=s$coef[,"Pr(>|z|)"], LRT=LRT, AIC=AIC, row.names=NULL)
+}
+
+fit_univ_quick <- function(S, data, vars){
+  do.call(rbind, lapply(vars, function(v) safe_cox_one(S, data, v)))
+}
+
+res_os  <- fit_univ_quick(S_OS,  hc, cxcl_vars)
+res_rfs <- fit_univ_quick(S_RFS, hc, cxcl_vars)
+
+cat("\n=== Overall survival ===\n");  print(res_os,  digits=4, row.names=FALSE)
+cat("\n=== Recurrence-free survival ===\n"); print(res_rfs, digits=4, row.names=FALSE)
+
+best_os  <- res_os$var [ which.min(ifelse(is.finite(res_os$AIC),  res_os$AIC,  Inf)) ]
+best_rfs <- res_rfs$var[ which.min(ifelse(is.finite(res_rfs$AIC), res_rfs$AIC, Inf)) ]
+cat("\nBest(OS):", best_os, "  Best(RFS):", best_rfs, "\n")
+
+```
+
+* CXCL17P가 두 결과 모두에서 가장 강하게 연관되어 있습니다. ( $\because$ **OS**와 **RFS**에서 AIC, p-value 모두 최솟값)
+
+#### (b) Diagnostics ( martingale residuals, and use case-deletion residuals )
+
+```{r b-martingale} 
+mart_plot <- function(S, data, xvar, main_suffix=""){
+  fit <- coxph(S ~ data[[xvar]], data=data, ties="efron", x=TRUE, y=TRUE)
+  rM  <- resid(fit, type="martingale")
+  xx  <- data[[xvar]]
+  op <- par(mfrow=c(1,1))
+  plot(xx, rM, pch=20, col="gray40",
+       xlab=xvar, ylab="Martingale residual",
+       main=paste("Martingale vs", xvar, main_suffix))
+  lines(lowess(xx, rM, f=2/3), lwd=2)
+  abline(h=0, lty=2, col="gray50")
+  par(op)
+  invisible(fit)
+}
+
+fit_os_best  <- mart_plot(S_OS,  hc, best_os,  "(OS)")
+fit_rfs_best <- mart_plot(S_RFS, hc, best_rfs, "(RFS)")
+
+```
+
+* loess 곡선이 수평에 가깝다고 보기 힘들어 보입니다.( + 이상점 후보가 보인다)
+
+```{r b-casedeletion-os}
+#
+resid.dfbeta  <- residuals(fit_os_best, type = "dfbeta")
+resid.dfbeta <- cbind(resid.dfbeta)
+
+resid.dfbetas <- residuals(fit_os_best, type = "dfbetas")
+resid.dfbetas <- cbind(resid.dfbetas)
+
+## 단일 예측자 모형이므로 1열이 CXCL17P
+plot(resid.dfbeta[,1], type="h",
+     xlab="Observation index", ylab="DFBETA for CXCL17P",
+     main="DFBETA (OS)"); abline(h=0, lty=2, col="gray60")
+
+plot(resid.dfbetas[,1], type="h",
+     xlab="Observation index", ylab="DFBETAS for CXCL17P",
+     main="DFBETAS (OS)"); abline(h=0, lty=2, col="gray60")
+
+## |DFBETA| > 2/sqrt(n) 이면 강한 영향 후보
+obsn = length(resid.dfbeta) 
+abline(h =  2/sqrt(obsn), lty=3, col="red")
+abline(h = -2/sqrt(obsn), lty=3, col="red")
+```
+```{r b-casedeletion-rfs}
+#
+resid.dfbeta  <- residuals(fit_rfs_best, type = "dfbeta")
+resid.dfbeta <- cbind(resid.dfbeta)
+
+resid.dfbetas <- residuals(fit_rfs_best, type = "dfbetas")
+resid.dfbetas <- cbind(resid.dfbetas)
+
+## 단일 예측자 모형이므로 1열이 CXCL17P
+plot(resid.dfbeta[,1], type="h",
+     xlab="Observation index", ylab="DFBETA for CXCL17P",
+     main="DFBETA (rfs)"); abline(h=0, lty=2, col="gray60")
+
+plot(resid.dfbetas[,1], type="h",
+     xlab="Observation index", ylab="DFBETAS for CXCL17P",
+     main="DFBETAS (rfs)"); abline(h=0, lty=2, col="gray60")
+
+## |DFBETA| > 2/sqrt(n) 이면 강한 영향 후보
+obsn = length(resid.dfbeta) 
+abline(h =  2/sqrt(obsn), lty=3, col="red")
+abline(h = -2/sqrt(obsn), lty=3, col="red")
+```
+
+* DFBETAS의 값이 빨간 점선을 넘어간 값들이 아웃라이어 후보입니다.
+
+#### (c) Schoenfeld Residual
+
+```{r c}
+z_os <- cox.zph(fit_os_best)
+print(z_os)
+term_names <- names(coef(fit_os_best))
+vsel <- if (length(term_names) >= 1) term_names[1] else 1
+plot(z_os, var = vsel, main = paste0("Schoenfeld residuals (OS) - ", vsel))
+usr <- par("usr") # c(xmin, xmax, ymin, ymax)
+segments(x0 = usr[1], y0 = 0, x1 = usr[2], y1 = 0, lty = 2, col = "gray50")
+
+z_rfs <- cox.zph(fit_rfs_best)
+print(z_rfs)
+term_names_r <- names(coef(fit_rfs_best))
+vsel_r <- if (length(term_names_r) >= 1) term_names_r[1] else 1
+plot(z_rfs, var = vsel_r, main = paste0("Schoenfeld residuals (RFS) - ", vsel_r))
+usr <- par("usr")
+segments(x0 = usr[1], y0 = 0, x1 = usr[2], y1 = 0, lty = 2, col = "gray50")
+
+```
+
+* OS: Schoenfeld 잔차 검정에서 p=0.61로 PH 가정 위반 증거가 없었다.
+
+* RFS: Schoenfeld 잔차 검정에서 p=0.087로 PH 가정 위반 증거가 없었다.
+
+---
+---
+
+[![View on GitHub](https://img.shields.io/badge/GitHub-Repository-blue?logo=github)](https://github.com/Taenyoung-Lee/assignments/blob/main/survival_analysis/week7/Survival_Analysis_week7_assignment.rmd)
+
+
