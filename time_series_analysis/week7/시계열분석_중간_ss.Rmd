@@ -1,7 +1,7 @@
 ---
-title: "SARIMA"
+title: "SARIMIA_ss"
 author: "Taenyoung Lee"
-date: "2025-10-13"
+date: "2025-10-20"
 output:
   html_document:
     toc: true
@@ -139,8 +139,24 @@ y <- ts(df$precip,
 # 확인
 start(y); end(y); frequency(y)
 ```
+## Box-Cox Transformation
+```{r}
+#### 7-1) Box–Cox 변환 준비 ------------------------------------------------------
+# 0 및 음수 방지를 위한 양수화 오프셋 설정
+eps <- ifelse(min(y, na.rm=TRUE) <= 0, abs(min(y, na.rm=TRUE)) + 1e-10, 0)
+y_pos <- y + eps                 # 양수화된 시계열
 
-## ACF plot
+# λ(람다) 추정: 계절성이 있으므로 guerrero 권장
+lambda <- BoxCox.lambda(y_pos, method = "guerrero", lower = -2, upper = 2)
+
+# 변환된 시계열 (이후 모형식별/적합은 이 스케일에서 진행)
+y_bc <- BoxCox(y_pos, lambda)
+
+cat(sprintf("Box–Cox 설정: lambda = %.3f, eps = %.6f\n", lambda, eps))
+
+```
+
+## ACF plot(12계절차분)
 
 ```{r}
 #### 8) 정상성(시각적 점검): ACF/PACF 플롯 -----------------------------------------
@@ -156,22 +172,40 @@ p_acf_seas  <- ggAcf(y_seasonal_diff, lag.max = 48) + ggtitle("ACF: 12-계절차
 p_pacf_seas <- ggPacf(y_seasonal_diff, lag.max = 48) + ggtitle("PACF: 12-계절차분 후")
 print(p_acf_seas); print(p_pacf_seas)
 ```
-
-
-## AIC 그리드서치치
+## ACF plot (+BoxCox Transformation)
 
 ```{r}
-#### 9) AIC 그리드 탐색 (p=0..3, q=0..3, P=0..2, Q=0..2) ------------------------
+#### 8) 정상성(시각적 점검): ACF/PACF (Box–Cox 변환 스케일) ----------------------
+p_acf_orig  <- ggAcf(y_bc, lag.max = 48)  + ggtitle("ACF: Box–Cox 변환 후 y_bc")
+p_pacf_orig <- ggPacf(y_bc, lag.max = 48) + ggtitle("PACF: Box–Cox 변환 후 y_bc")
+print(p_acf_orig); print(p_pacf_orig)
+
+# 계절차분(12) 후
+y_bc_seas <- diff(y_bc, lag = 12)
+p_acf_seas  <- ggAcf(y_bc_seas, lag.max = 48)  + ggtitle("ACF: y_bc의 12-계절차분 후")
+p_pacf_seas <- ggPacf(y_bc_seas, lag.max = 48) + ggtitle("PACF: y_bc의 12-계절차분 후")
+print(p_acf_seas); print(p_pacf_seas)
+
+```
+
+
+
+## AIC 그리드서치
+
+```{r}
+#### 9) AIC 그리드 탐색 (내부 Box–Cox, y_pos 사용) -----------------------------
 grid <- expand.grid(p = 0:3, q = 0:3, P = 0:2, Q = 0:2, KEEP.OUT.ATTRS = FALSE) |>
   dplyr::filter(!(p == 0 & q == 0 & P == 0 & Q == 0))
 
-get_aic <- function(p, q, P, Q, include_mean = TRUE) {
+get_aic <- function(p, q, P, Q, include_mean = FALSE) {
+  # ★ 내부 Box–Cox: y_pos + lambda
   fit <- try(
-    Arima(y,
+    Arima(y_pos,
           order    = c(p, 0, q),
           seasonal = list(order = c(P, 1, Q), period = 12),
           include.mean = include_mean,
-          method   = "ML"),
+          lambda  = lambda,      # ★ 추정 람다 일관 사용
+          method  = "ML"),
     silent = TRUE
   )
   if (inherits(fit, "try-error")) return(Inf)
@@ -179,31 +213,26 @@ get_aic <- function(p, q, P, Q, include_mean = TRUE) {
 }
 
 grid$AIC <- apply(grid, 1, function(r)
-  get_aic(r[["p"]], r[["q"]], r[["P"]], r[["Q"]], include_mean = TRUE))
+  get_aic(r[["p"]], r[["q"]], r[["P"]], r[["Q"]], include_mean = FALSE))
 
 grid_sorted <- grid |> arrange(AIC)
 head(grid_sorted, 5)
+
 ```
 
 ## 최종모형적합
 
 ```{r}
-#### 10) 최종 모형 적합: (2,0,2)×(0,1,1)[12] -------------------------------------
-# SAS와와 동일 모델 두 가지(절편 포함/제외) 비교
-fit_with_int <- Arima(y,
-                      order    = c(2, 0, 2),
-                      seasonal = list(order = c(0, 1, 1), period = 12),
-                      include.mean = TRUE,
-                      method   = "ML")
 
-fit_no_int <- Arima(y,
-                    order    = c(2, 0, 2),
-                    seasonal = list(order = c(0, 1, 1), period = 12),
-                    include.mean = FALSE,
-                    method   = "ML")
+#### 10) 최종 모형 적합: (0,0,2)×(0,1,2)[12], 내부 Box–Cox ----------------------
+fit <- Arima(y_pos,
+             order    = c(0, 0, 2),
+             seasonal = list(order = c(0, 1, 2), period = 12),
+             include.mean = FALSE,   # D=1이면 보통 FALSE 권장
+             lambda  = lambda,       # ★ 추정 람다 사용
+             method  = "ML")
 
-fit_with_int
-fit_no_int
+fit
 
 ```
 
@@ -211,42 +240,56 @@ fit_no_int
 
 ```{r}
 #### 11) 잔차 진단 ---------------------------------------------------------------
-#res_with <- residuals(fit_with_int)
-res_no   <- residuals(fit_no_int)
+resid_fit <- residuals(fit)
 
-# (a) 잔차 시계열
-#autoplot(res_with) + ggtitle("Residuals (with intercept)") + ylab("Residual")
-autoplot(res_no)   + ggtitle("Residuals (no intercept)")   + ylab("Residual")
+autoplot(resid_fit) + ggtitle("Residuals (Box–Cox 내부 변환 스케일)") + ylab("Residual")
+ggAcf(resid_fit,  lag.max = 24) + ggtitle("ACF of residuals")
+ggPacf(resid_fit, lag.max = 24) + ggtitle("PACF of residuals")
 
-# (b) 잔차 ACF/PACF
-#ggAcf(res_with, lag.max = 24) + ggtitle("ACF of residuals (with intercept)")
-#ggPacf(res_with, lag.max = 24) + ggtitle("PACF of residuals (with intercept)")
-ggAcf(res_no, lag.max = 24) + ggtitle("ACF of residuals (no intercept)")
-ggPacf(res_no, lag.max = 24) + ggtitle("PACF of residuals (no intercept)")
+# ★ Ljung-Box의 자유도는 (p+q+P+Q)로 보정 (여기선 0+2+0+2 = 4)
+Box.test(resid_fit, lag = 24, type = "Ljung-Box", fitdf = 4)
+checkresiduals(fit)
 
-# (c) 포트맨토(Ljung-Box) — 자유도 p+q+P+Q
-#Box.test(res_with, lag = 24, type = "Ljung-Box", fitdf = 2 + 2 + 0 + 1)
-Box.test(res_no,   lag = 24, type = "Ljung-Box", fitdf = 2 + 2 + 0 + 1)
 
-# (d) 종합 점검
-#checkresiduals(fit_with_int)
-checkresiduals(fit_no_int)
 
 ```
 
 ## 12개월 forecast
 
 ```{r}
-#### 12) 12개월 예측 및 플롯 -----------------------------------------------------
-#fc_with <- forecast(fit_with_int, h = 12)
-fc_no   <- forecast(fit_no_int,   h = 12)
+# 내부 Box–Cox로 적합된 fit 가정 (lambda 포함)
+fc <- forecast(fit, h = 12, biasadj = FALSE)   # ★ 보정 끔
 
-#autoplot(fc_with) + ggtitle("Forecast: (2,0,2)×(0,1,1)[12] (with intercept)")
-autoplot(fc_no)   + ggtitle("Forecast: (2,0,2)×(0,1,1)[12] (no intercept)")
+# autoplot(fc)는 eps를 빼지 않습니다. 우리가 직접 역보정한 데이터로 그리겠습니다.
+df_fc <- as.data.frame(fc)            # mean, Lo 80, Hi 80, Lo 95, Hi 95 …
 
-# 예측표 확인
-#head(as.data.frame(fc_with))
-head(as.data.frame(fc_no))
+# eps 되돌리고 바닥 0
+cols <- intersect(c("Point Forecast","Lo 80","Hi 80","Lo 95","Hi 95"), names(df_fc))
+for (cl in cols) df_fc[[cl]] <- pmax(df_fc[[cl]] - eps, 0)
+
+# 시각화 (원자료와 예측을 같은 스케일로)
+library(tidyr)
+library(ggplot2)
+
+# 과거 + 예측을 한 프레임으로
+df_hist <- data.frame(date = as.Date(time(y)), precip = as.numeric(y))
+df_fc_plot <- data.frame(
+  date = seq(from = max(df_hist$date) + 1, by = "month", length.out = nrow(df_fc)),
+  mean = df_fc$`Point Forecast`,
+  lo80 = df_fc$`Lo 80`, hi80 = df_fc$`Hi 80`,
+  lo95 = df_fc$`Lo 95`, hi95 = df_fc$`Hi 95`
+)
+
+ggplot() +
+  geom_line(data = df_hist, aes(date, precip), linewidth = 0.4) +
+  geom_ribbon(data = df_fc_plot, aes(date, ymin = lo95, ymax = hi95), alpha = 0.15) +
+  geom_ribbon(data = df_fc_plot, aes(date, ymin = lo80, ymax = hi80), alpha = 0.25) +
+  geom_line(data = df_fc_plot, aes(date, mean), linewidth = 0.6) +
+  labs(title = "12-month Forecast (back-transformed)",
+       x = "Date", y = "Monthly precipitation (mm)") +
+  theme_minimal()
+
+head(df_fc_plot)
 ``` 
 
 
