@@ -1,0 +1,295 @@
+---
+title: "SARIMIA_ss"
+author: "Taenyoung Lee"
+date: "2025-10-20"
+output:
+  html_document:
+    toc: true
+    toc_depth: 3
+    number_sections: true
+    toc_float: true
+    df_print: paged
+    code_folding: hide
+    theme: readable
+fontsize: 11pt
+geometry: margin=1in
+always_allow_html: true
+---
+
+## libaray 호출 및 전처리
+
+```{r}
+#### 0) 패키지 -------------------------------------------------------------------
+# install.packages(c("readr","dplyr","lubridate","stringr","zoo",
+#                    "forecast","tseries","ggplot2"))
+library(readr)
+library(dplyr)
+library(lubridate)
+library(stringr)
+library(zoo)
+library(forecast)
+library(tseries)
+library(ggplot2)
+
+#### 1) 파일 경로 ----------------------------------------------------------------
+in_path <- "C:/Users/Tae/Downloads/강릉강수량_s.csv"  
+
+#### 2) CSV 읽기 (EUC-KR) -------------------------------------------------------
+df_raw <- readr::read_csv(
+  file = in_path,
+  locale = locale(encoding = "EUC-KR"),
+  show_col_types = FALSE
+)
+
+# 열 이름 확인 (필요시 주석 해제)
+# print(names(df_raw))
+
+#### 3) 열 매핑: '일시'와 강수량 열 ------------------------------------------------
+# 일시 후보
+date_candidates <- c("일시","날짜","date","DATE","Date")
+date_col <- intersect(date_candidates, names(df_raw))[1]
+if (is.na(date_col)) stop("날짜/일시 열을 찾지 못했습니다. (예: '일시', '날짜', 'date')")
+
+# 강수량 후보
+prec_candidates <- c("강수량(mm)","강수량","precip","rain")
+prec_col <- intersect(prec_candidates, names(df_raw))[1]
+if (is.na(prec_col)) stop("강수량 열을 찾지 못했습니다. (예: '강수량(mm)', '강수량', 'precip')")
+
+# 작업용 데이터
+df <- df_raw %>%
+  rename(datetime_kr = !!date_col,
+         precip_raw  = !!prec_col)
+
+#### 4) '1911년 10월' 형식 파서 ---------------------------------------------------
+# - 공백/문자 변형에도 견고하게 동작
+# - "1911년 10월", "1911 년 10 월", " 1911년  9월 " 등 처리
+# - 연/월 숫자만 추출 후 월초(YYYY-MM-01) Date 생성
+parse_year_month_kr <- function(x) {
+  s <- trimws(as.character(x))
+  # 숫자/년/월 외 문자 제거는 불필요하나, 안전하게 연/월만 캡처
+  # 패턴: ^... (연) ... 년 ... (월) ... 월 ...
+  # 연: 3~4자리(보통 4자리), 월: 1~2자리
+  yr <- suppressWarnings(as.integer(str_match(s, "([0-9]{3,4})\\s*년")[,2]))
+  mo <- suppressWarnings(as.integer(str_match(s, "([0-9]{1,2})\\s*월")[,2]))
+
+  # 비정상 값 처리
+  yr[is.na(yr) | yr < 0] <- NA_integer_
+  mo[is.na(mo) | mo < 1 | mo > 12] <- NA_integer_
+
+  # 날짜 문자열 만들기
+  out <- ifelse(!is.na(yr) & !is.na(mo),
+                sprintf("%04d-%02d-01", yr, mo),
+                NA_character_)
+  as.Date(out)
+}
+
+# 변환 실행
+df$date <- parse_year_month_kr(df$datetime_kr)
+
+# 변환 결과 점검
+if (any(is.na(df$date))) {
+  warning(sprintf("날짜 변환 실패 %d건이 있습니다. (총 %d건)",
+                  sum(is.na(df$date)), nrow(df)))
+}
+
+#### 5) 강수량 숫자화 및 월 집계 ---------------------------------------------------
+# - 동일 월에 다수 관측치가 있으면 합계(원자료가 월별 1개면 합계=원값)
+df <- df %>%
+  mutate(precip = suppressWarnings(as.numeric(precip_raw))) %>%
+  filter(!is.na(date), !is.na(precip)) %>%
+  mutate(month_start = floor_date(date, "month")) %>%
+  group_by(month_start) %>%
+  summarise(precip = sum(precip, na.rm = TRUE), .groups = "drop") %>%
+  arrange(month_start) %>%
+  rename(date = month_start)
+
+stopifnot(nrow(df) > 0)
+
+cat(sprintf("데이터 범위: %s ~ %s, 관측치: %d\n",
+            format(min(df$date), "%Y-%m"), format(max(df$date), "%Y-%m"), nrow(df)))
+```
+
+## 원자료시각화
+
+```{r}
+#### 6) 원자료 시각화 -------------------------------------------------------------
+ggplot(df, aes(x = date, y = precip)) +
+  geom_line() +
+  labs(
+    title = "강릉 월별 강수량(원자료)",
+    x = sprintf("날짜 (%s - %s)",
+                format(min(df$date), "%Y.%m"),
+                format(max(df$date), "%Y.%m")),
+    y = "강수량 (mm)"
+  )
+```
+
+## 시계열 전처리
+
+```{r}
+#### 7) ts 객체(frequency=12) -----------------------------------------------------
+start_year <- year(min(df$date)); start_mon <- month(min(df$date))
+end_year   <- year(max(df$date)); end_mon   <- month(max(df$date))
+
+y <- ts(df$precip,
+        start = c(start_year, start_mon),
+        end   = c(end_year,   end_mon),
+        frequency = 12)
+
+# 확인
+start(y); end(y); frequency(y)
+```
+## Box-Cox Transformation
+```{r}
+#### 7-1) Box–Cox 변환 준비 ------------------------------------------------------
+# 0 및 음수 방지를 위한 양수화 오프셋 설정
+eps <- ifelse(min(y, na.rm=TRUE) <= 0, abs(min(y, na.rm=TRUE)) + 1e-10, 0)
+y_pos <- y + eps                 # 양수화된 시계열
+
+# λ(람다) 추정: 계절성이 있으므로 guerrero 권장
+lambda <- BoxCox.lambda(y_pos, method = "guerrero", lower = -2, upper = 2)
+
+# 변환된 시계열 (이후 모형식별/적합은 이 스케일에서 진행)
+y_bc <- BoxCox(y_pos, lambda)
+
+cat(sprintf("Box–Cox 설정: lambda = %.3f, eps = %.6f\n", lambda, eps))
+
+```
+
+## ACF plot(12계절차분)
+
+```{r}
+#### 8) 정상성(시각적 점검): ACF/PACF 플롯 -----------------------------------------
+# 필요 패키지: forecast, ggplot2 (이미 로드되어 있다고 가정)
+# 원시계열 ACF/PACF
+p_acf_orig  <- ggAcf(y, lag.max = 48) + ggtitle("ACF: 원자료 y")
+p_pacf_orig <- ggPacf(y, lag.max = 48) + ggtitle("PACF: 원자료 y")
+print(p_acf_orig); print(p_pacf_orig)
+
+# 계절차분(12) 후 ACF/PACF
+y_seasonal_diff <- diff(y, lag = 12)
+p_acf_seas  <- ggAcf(y_seasonal_diff, lag.max = 48) + ggtitle("ACF: 12-계절차분 후")
+p_pacf_seas <- ggPacf(y_seasonal_diff, lag.max = 48) + ggtitle("PACF: 12-계절차분 후")
+print(p_acf_seas); print(p_pacf_seas)
+```
+## ACF plot (+BoxCox Transformation)
+
+```{r}
+#### 8) 정상성(시각적 점검): ACF/PACF (Box–Cox 변환 스케일) ----------------------
+p_acf_orig  <- ggAcf(y_bc, lag.max = 48)  + ggtitle("ACF: Box–Cox 변환 후 y_bc")
+p_pacf_orig <- ggPacf(y_bc, lag.max = 48) + ggtitle("PACF: Box–Cox 변환 후 y_bc")
+print(p_acf_orig); print(p_pacf_orig)
+
+# 계절차분(12) 후
+y_bc_seas <- diff(y_bc, lag = 12)
+p_acf_seas  <- ggAcf(y_bc_seas, lag.max = 48)  + ggtitle("ACF: y_bc의 12-계절차분 후")
+p_pacf_seas <- ggPacf(y_bc_seas, lag.max = 48) + ggtitle("PACF: y_bc의 12-계절차분 후")
+print(p_acf_seas); print(p_pacf_seas)
+
+```
+
+
+
+## AIC 그리드서치
+
+```{r}
+#### 9) AIC 그리드 탐색 (내부 Box–Cox, y_pos 사용) -----------------------------
+grid <- expand.grid(p = 0:3, q = 0:3, P = 0:2, Q = 0:2, KEEP.OUT.ATTRS = FALSE) |>
+  dplyr::filter(!(p == 0 & q == 0 & P == 0 & Q == 0))
+
+get_aic <- function(p, q, P, Q, include_mean = FALSE) {
+  # ★ 내부 Box–Cox: y_pos + lambda
+  fit <- try(
+    Arima(y_pos,
+          order    = c(p, 0, q),
+          seasonal = list(order = c(P, 1, Q), period = 12),
+          include.mean = include_mean,
+          lambda  = lambda,      # ★ 추정 람다 일관 사용
+          method  = "ML"),
+    silent = TRUE
+  )
+  if (inherits(fit, "try-error")) return(Inf)
+  AIC(fit)
+}
+
+grid$AIC <- apply(grid, 1, function(r)
+  get_aic(r[["p"]], r[["q"]], r[["P"]], r[["Q"]], include_mean = FALSE))
+
+grid_sorted <- grid |> arrange(AIC)
+head(grid_sorted, 5)
+
+```
+
+## 최종모형적합
+
+```{r}
+
+#### 10) 최종 모형 적합: (0,0,2)×(0,1,2)[12], 내부 Box–Cox ----------------------
+fit <- Arima(y_pos,
+             order    = c(0, 0, 2),
+             seasonal = list(order = c(0, 1, 2), period = 12),
+             include.mean = FALSE,   # D=1이면 보통 FALSE 권장
+             lambda  = lambda,       # ★ 추정 람다 사용
+             method  = "ML")
+
+fit
+
+```
+
+## 잔차진단
+
+```{r}
+#### 11) 잔차 진단 ---------------------------------------------------------------
+resid_fit <- residuals(fit)
+
+autoplot(resid_fit) + ggtitle("Residuals (Box–Cox 내부 변환 스케일)") + ylab("Residual")
+ggAcf(resid_fit,  lag.max = 24) + ggtitle("ACF of residuals")
+ggPacf(resid_fit, lag.max = 24) + ggtitle("PACF of residuals")
+
+# ★ Ljung-Box의 자유도는 (p+q+P+Q)로 보정 (여기선 0+2+0+2 = 4)
+Box.test(resid_fit, lag = 24, type = "Ljung-Box", fitdf = 4)
+checkresiduals(fit)
+
+
+
+```
+
+## 12개월 forecast
+
+```{r}
+# 내부 Box–Cox로 적합된 fit 가정 (lambda 포함)
+fc <- forecast(fit, h = 12, biasadj = FALSE)   # ★ 보정 끔
+
+# autoplot(fc)는 eps를 빼지 않습니다. 우리가 직접 역보정한 데이터로 그리겠습니다.
+df_fc <- as.data.frame(fc)            # mean, Lo 80, Hi 80, Lo 95, Hi 95 …
+
+# eps 되돌리고 바닥 0
+cols <- intersect(c("Point Forecast","Lo 80","Hi 80","Lo 95","Hi 95"), names(df_fc))
+for (cl in cols) df_fc[[cl]] <- pmax(df_fc[[cl]] - eps, 0)
+
+# 시각화 (원자료와 예측을 같은 스케일로)
+library(tidyr)
+library(ggplot2)
+
+# 과거 + 예측을 한 프레임으로
+df_hist <- data.frame(date = as.Date(time(y)), precip = as.numeric(y))
+df_fc_plot <- data.frame(
+  date = seq(from = max(df_hist$date) + 1, by = "month", length.out = nrow(df_fc)),
+  mean = df_fc$`Point Forecast`,
+  lo80 = df_fc$`Lo 80`, hi80 = df_fc$`Hi 80`,
+  lo95 = df_fc$`Lo 95`, hi95 = df_fc$`Hi 95`
+)
+
+ggplot() +
+  geom_line(data = df_hist, aes(date, precip), linewidth = 0.4) +
+  geom_ribbon(data = df_fc_plot, aes(date, ymin = lo95, ymax = hi95), alpha = 0.15) +
+  geom_ribbon(data = df_fc_plot, aes(date, ymin = lo80, ymax = hi80), alpha = 0.25) +
+  geom_line(data = df_fc_plot, aes(date, mean), linewidth = 0.6) +
+  labs(title = "12-month Forecast (back-transformed)",
+       x = "Date", y = "Monthly precipitation (mm)") +
+  theme_minimal()
+
+head(df_fc_plot)
+``` 
+
+
