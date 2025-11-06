@@ -156,6 +156,6 @@ print(lr_test_result)
 -----
 
 
-[![View on GitHub](https://img.shields.io/badge/GitHub-Repository-blue?logo=github)](https://github.com/Taenyoung-Lee/assignments/blob/main/survival_analysis/week7/Survival_Analysis_week9_assignment.rmd)
+[![View on GitHub](https://img.shields.io/badge/GitHub-Repository-blue?logo=github)](https://github.com/Taenyoung-Lee/assignments/blob/main/survival_analysis/week9/Survival_Analysis_week9_assignment.rmd)
 
 
