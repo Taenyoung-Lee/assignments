@@ -1,0 +1,6 @@
+\beamer@sectionintoc {1}{문제 설정과 자료}{3}{0}{1}
+\beamer@sectionintoc {2}{기본 SARIMA 모형}{5}{0}{2}
+\beamer@sectionintoc {3}{시계열 이상치 탐지}{7}{0}{3}
+\beamer@sectionintoc {4}{조건부 저강수 월 정의}{9}{0}{4}
+\beamer@sectionintoc {5}{계절더미 + ARMA 모형}{11}{0}{5}
+\beamer@sectionintoc {6}{논의 및 향후 과제}{12}{0}{6}

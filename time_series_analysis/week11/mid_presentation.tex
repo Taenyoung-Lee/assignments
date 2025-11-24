@@ -1,0 +1,239 @@
+\documentclass{beamer}
+
+% ===== 기본 설정 =====
+\usetheme{Madrid}
+\usecolortheme{default}
+
+% [demo] 옵션은 이미지가 없을 때 검은 상자로 대체하여 에러를 방지합니다.
+% 실제 이미지 파일(tsplot.pdf 등)이 준비되어 있다면 [demo]를 지우세요.
+\usepackage{graphicx} 
+
+\usepackage{kotex}          % 한글
+\usepackage{amsmath,amssymb,bm}
+\usepackage{booktabs}
+\usepackage{mathtools}
+
+\title[강릉 강수량 시계열]{강릉 월별 강수량 시계열 모형과\\조건부 저강수 월 탐지}
+\author[Taenyoung Lee]{Taenyoung Lee}
+\date[2025-11-24]{2025년 11월 24일}
+
+%===========================================================
+\begin{document}
+%===========================================================
+
+\begin{frame}
+  \titlepage
+\end{frame}
+
+\begin{frame}{발표 개요}
+  \tableofcontents
+\end{frame}
+
+%===========================================================
+\section{문제 설정과 자료}
+%===========================================================
+
+\begin{frame}{연구 질문과 아이디어}
+  \begin{itemize}
+    \item 자료: 강릉 월별 강수량 (1998-01 $\sim$ 2025-09, monthly)
+    \item 목표
+      \begin{itemize}
+        \item 계절성을 반영한 시계열 모형(SARIMA, ARMA + 계절더미) 적합
+        \item 시계열적인 \alert{이상치(outlier)} 자동 탐지
+        \item 모형이 기대하는 값보다 \alert{유의하게 적게 내린 달}을
+              \emph{조건부 저강수 월}로 정의
+      \end{itemize}
+    \item 오늘 발표에서 할 것
+      \begin{enumerate}
+        \item 기본 SARIMA 모형과 잔차 진단
+        \item ARMA + 계절더미 모형과 잔차 진단
+        \item tsoutliers를 이용한 이상치 탐지 결과
+        \item SARIMA/ARMA+계절더미 기반 조건부 저강수 월 정의
+        \item 현재까지의 한계와 앞으로의 방향
+      \end{enumerate}
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{자료 요약 및 원시계열}
+  \begin{itemize}
+    \item 시작: 1998-01, 종료: 2025-09, 주기: 12 (월별 시계열)
+  \end{itemize}
+  \vfill
+  \begin{center}
+    \includegraphics[width=0.9\textwidth]{tsplot.png}
+  \end{center}
+  \vspace{0.3em}
+  \small
+  \centering{``강릉 월별 강수량(원자료)'' 선그래프}
+\end{frame}
+
+%===========================================================
+\section{기본 SARIMA 모형}
+%===========================================================
+
+\begin{frame}{정상성 점검과 모형 후보 탐색}
+  \begin{itemize}
+    \item 원자료 ACF/PACF에서 \alert{강한 12개월 주기성} 확인
+    \item 12-계절차분 $y_t^\ast = (1 - B^{12})y_t$ 적용 후 ACF/PACF로
+          계절 MA(1) 구조가 적당해 보임
+  \end{itemize}
+  \vfill
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+      \begin{center}
+        \includegraphics[width=\textwidth]{plot_origin_acf.png}
+        \small ACF / PACF (원자료)
+      \end{center}
+    \column{0.5\textwidth}
+      \begin{center}
+        \includegraphics[width=\textwidth]{plot_acf.png}
+        \small ACF / PACF (12-계절차분 후)
+      \end{center}
+  \end{columns}
+  \vfill
+  \begin{itemize}
+    \item AIC 그리드 탐색: $p=0\ldots3,\ q=0\ldots3,\ P=0\ldots2,\ Q=0\ldots2,\ D=1$에서
+          \[
+            \text{ARIMA}(2,0,2)(0,1,1)_{12}
+          \]
+          모형이 가장 작은 AIC를 가짐 
+  \end{itemize} % <<< 여기가 누락되었었습니다.
+\end{frame}   % <<< 여기가 누락되었었습니다.
+
+\begin{frame}{최종 SARIMA 모형과 식}
+  \begin{block}{선택된 기본 모형}
+    \[
+      \text{ARIMA}(2,0,2)(0,1,1)_{12},\quad \text{(절편 없이)} 
+    \]
+  \end{block}
+\end{frame}
+
+%===========================================================
+\section{시계열 이상치 탐지}
+%===========================================================
+
+\begin{frame}{tsoutliers를 이용한 이상치 탐지}
+  \begin{itemize}
+    \item \texttt{forecast::tsoutliers(y)}로 자동 이상치 탐지
+    \item 결과: 시점 index
+      \[
+        \{56,\ 93,\ 103,\ 262,\ 273\}
+      \]
+      등 14개가 이상치로 탐지됨
+    \item 월 단위로 환산하면
+      \begin{itemize}
+        \item 56: 2002-08
+        \item 93: 2005-09
+        \item 103: 2006-07
+        \item 262: 2019-10
+        \item 273: 2020-09
+      \end{itemize}
+    \item 모두 \alert{강수량이 비정상적으로 큰 이벤트}로 해석 가능
+  \end{itemize}
+\end{frame}
+\begin{frame}
+    
+  \begin{center}
+    \includegraphics[width=0.8\textwidth]{plot_outlier.png}
+    \small 빨간 점: tsoutliers가 탐지한 이상치 월
+  \end{center}
+\end{frame}
+
+%===========================================================
+\section{조건부 저강수 월 정의}
+%===========================================================
+
+\begin{frame}{아이디어: ``조건부 저강수 월''}
+  \begin{block}{동기}
+    \begin{itemize}
+      \item 단순히 ``강수량이 적은 달''이 아니라,
+      \item \emph{모형이 기대한 값보다} 유의하게 적게 내린 달을 잡고 싶다.
+      \item 계절성 + 자기상관 구조를 제거한 후 남는 ``이상하게 적은 부분''에 관심.
+    \end{itemize}
+  \end{block}
+  \vfill
+  \begin{block}{제안}
+    \begin{itemize}
+      \item 모형으로 얻은 조건부 기대값 $\hat{y}_t = \mathbb{E}(y_t \mid \text{과거})$
+      \item 예측오차의 표준편차 $\hat{\sigma}$를 이용하여
+        \[
+          z_t = \frac{y_t - \hat{y}_t}{\hat{\sigma}}
+        \]
+      \item 임계값 $k$에 대해
+        \[
+          z_t < -k \quad\Rightarrow\quad
+          \text{``조건부 저강수 월''로 판단}
+        \]
+      \item 실제 구현에서는 $k = 1.5$를 사용 (조정 가능)
+    \end{itemize}
+  \end{block}
+\end{frame}
+
+\begin{frame}{모형 기반 조건부 저강수 월 예시}
+  \begin{columns}[T]
+    \column{0.48\textwidth}
+      \begin{center}
+        \includegraphics[width=\textwidth]{plot_arima_z.png}
+        \small $z_t$ 시계열과 $-k$ 기준선
+      \end{center}
+    \column{0.48\textwidth}
+      \begin{center}
+        \includegraphics[width=\textwidth]{plot_arima_z_plot.png}
+        \small 원시계열 + 조건부 저강수 월 표시
+      \end{center}
+  \end{columns}
+\end{frame}
+
+%===========================================================
+\section{계절더미 + ARMA 모형}
+%===========================================================
+
+
+
+\begin{frame}{모형 기반 조건부 저강수 월 예시}
+  \begin{columns}[T]
+    \column{0.48\textwidth}
+      \begin{center}
+        \includegraphics[width=\textwidth]{plot_arma_z.png}
+        \small $z_t$ 시계열과 $-k$ 기준선
+      \end{center}
+    \column{0.48\textwidth}
+      \begin{center}
+        \includegraphics[width=\textwidth]{plot_arma_z_plot.png}
+        \small 원시계열 + 조건부 저강수 월 표시
+      \end{center}
+  \end{columns}
+\end{frame}
+
+%===========================================================
+\section{논의 및 향후 과제}
+%===========================================================
+
+\begin{frame}{현재까지의 정리}
+  \begin{itemize}
+    \item 기본 모형: ARIMA(2,0,2)(0,1,1)[12]가 AIC/BIC와 잔차진단을 기준으로
+          \alert{무난한 시계열 모형}으로 보임
+    \item tsoutliers를 통해 \alert{5개의 시계열 이상치}를 자동 탐지
+    \item 모형 기반으로 조건부 표준화 잔차 $z_t$를 정의하고
+          \alert{조건부 저강수 월} 개념을 도입
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{해결되지 않은 문제와 향후 방향}
+  \begin{itemize}
+    \item \textbf{이상치 처리와 모형 재적합}
+      \begin{itemize}
+        \item tsoutliers로 탐지된 이상치를
+              실제로 교정(replacement)한 후
+              모형을 다시 적합하는지 여부는 아직 실험 단계
+      \end{itemize}
+    \item \textbf{분포 가정과 변환}
+      \begin{itemize}
+        \item 강수량은 비대칭/heavy-tail 분포를 가질 수 있음
+      \end{itemize}
+  \end{itemize}
+\end{frame}
+
+%===========================================================
+\end{document}
+%===========================================================
