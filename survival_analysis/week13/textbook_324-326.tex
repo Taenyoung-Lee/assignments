@@ -1,0 +1,111 @@
+\documentclass{article}
+\usepackage{kotex}
+\usepackage{amsmath}
+\usepackage{geometry}
+\geometry{a4paper, margin=1in}
+
+\title{Survival Analysis Homework}
+\author{}
+\date{}
+
+\begin{document}
+
+\maketitle
+
+\section*{True or False (1번 $\sim$ 10번)}
+
+\begin{enumerate}
+    \item \textbf{F} \\
+    AFT는 로그 시간 척도에서 선형 모델이나, PH는 위험 함수에 대한 승법 모델이다.
+
+    \item \textbf{T} \\
+    $h(t) = -d/dt[\ln S(t)]$ 관계를 통해 서로 변환 가능하다.
+
+    \item \textbf{T} \\
+    와이블 분포에서 해당 플롯은 직선이 되며 기울기는 형상 모수 $p$이다.
+
+    \item \textbf{F} \\
+    로그-로지스틱은 위험 함수가 단조 증가하지 않아 PH 가정을 만족하지 않는다.
+
+    \item \textbf{F} \\
+    가속 인자가 1보다 크면 생존 시간이 연장되므로 노출은 유익(protective)하다.
+
+    \item \textbf{T} \\
+    $T_{exposed} = \gamma T_{unexposed}$ 관계에 의해 $S_0(t) = S_1(\gamma t)$가 성립한다.
+
+    \item \textbf{T} \\
+    프레일티 모델은 관측되지 않은 개체 간 이질성을 설명하기 위한 것이다.
+
+    \item \textbf{T} \\
+    감마 프레일티 모델에는 분산 파라미터($\theta$)가 추가된다.
+
+    \item \textbf{F} \\
+    $T$가 와이블 분포일 때 $\ln(T)$는 극단값 분포를 따른다.
+
+    \item \textbf{F} \\
+    우측 중도절단(Right-censored)에 해당한다.
+\end{enumerate}
+
+\section*{Weibull Model Analysis (11번 $\sim$ 17번)}
+
+\begin{enumerate}
+    \setcounter{enumi}{10}
+    \item \textbf{가속 인자(AF) 및 95\% CI} \\
+    AFT 모델의 `clinic` 계수(0.698) 이용.
+    \begin{align*}
+        AF &= \exp(0.698) \approx 2.01 \\
+        95\% CI &= \exp(0.698 \pm 1.96 \times 0.158) \approx [1.47, 2.74]
+    \end{align*}
+    해석: Clinic 2는 Clinic 1보다 생존 시간이 약 2배 길다.
+
+    \item \textbf{위험비(HR) 및 95\% CI} \\
+    PH 모델의 `clinic` 계수(-0.957) 이용.
+    \begin{align*}
+        HR &= \exp(-0.957) \approx 0.384 \\
+        95\% CI &= \exp(-0.957 \pm 1.96 \times 0.213) \approx [0.25, 0.58]
+    \end{align*}
+    해석: Clinic 2의 위험도는 Clinic 1보다 약 62\% 낮다.
+
+    \item \textbf{PH 계수 추정} \\
+    공식 $\beta_{PH} = -\beta_{AFT} \times p$ 적용.
+    \[
+        \beta_{PH} = -0.698 \times 1.370467 \approx -0.957
+    \]
+    실제 PH 모델 출력값과 일치한다.
+
+    \item \textbf{PRISDOSE 항의 목적} \\
+    감옥 기록 유무에 따른 투여량 효과 차이를 보기 위한 \textbf{상호작용(Interaction)} 항이다.
+
+    \item \textbf{Clinic 2 환자의 중앙값 생존 시간} \\
+    조건: Clinic=2, Prison=1, Dose=50, Prisdose=50.
+    \begin{align*}
+        LP &= 3.977 + 0.698(2) + 0.145(1) + 0.027(50) - 0.006(50) = 6.568 \\
+        t_{50} &= \exp(6.568) \times (\ln 2)^{1/1.37} \approx 544.3 \text{ 일}
+    \end{align*}
+
+    \item \textbf{Clinic 1 환자의 중앙값 생존 시간} \\
+    조건: Clinic=1 (나머지 동일).
+    \begin{align*}
+        LP &= 6.568 - 0.698 = 5.870 \\
+        t_{50} &= \exp(5.870) \times (0.693)^{0.7297} \approx 270.9 \text{ 일}
+    \end{align*}
+
+    \item \textbf{비율 확인} \\
+    \[
+        544.3 / 270.9 \approx 2.01
+    \]
+    이 비율은 11번의 가속 인자($\approx 2.01$)와 동일하다.
+\end{enumerate}
+
+\section*{Frailty Model Analysis (18번 $\sim$ 19번)}
+
+\begin{enumerate}
+    \setcounter{enumi}{17}
+    \item \textbf{파라미터 및 로그 우도 변화} \\
+    변화 없다. 계수와 로그 우도(-260.75) 모두 기존 모델과 동일하다.
+
+    \item \textbf{Theta = 0의 의미} \\
+    프레일티 분산($\theta$)이 0이므로 일반 와이블 모델로 충분함을 뜻한다.
+\end{enumerate}
+
+\end{document}
