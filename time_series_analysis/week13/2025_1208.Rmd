@@ -1,0 +1,551 @@
+---
+title: "강릉 강수량: Gamma GLM + 잔차 ARMA 분석"
+output:
+  html_document:
+    theme: flatly
+    toc: true
+    toc_depth: 3
+    toc_float: true
+    code_folding: hide
+    number_sections: true
+    df_print: paged
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo       = TRUE,
+  warning    = FALSE,
+  message    = FALSE,
+  fig.align  = "center",
+  fig.width  = 7,
+  fig.height = 4
+)
+```
+
+# 0. 패키지 및 테마 설정
+
+```{r packages}
+# 필요 패키지 설치/로딩 -------------------------------------------------------
+pkg_vec <- c(
+  "readr", "dplyr", "lubridate", "stringr", "zoo",
+  "ggplot2", "fitdistrplus", "forecast"
+)
+
+for (p in pkg_vec) {
+  if (!requireNamespace(p, quietly = TRUE)) {
+    install.packages(p)
+  }
+}
+
+library(readr)
+library(dplyr)
+library(lubridate)
+library(stringr)
+library(zoo)
+library(ggplot2)
+library(fitdistrplus)
+library(forecast)
+
+# ggplot 테마 --------------------------------------------------------------
+theme_set(
+  theme_minimal(base_size = 13) +
+    theme(
+      plot.title       = element_text(face = "bold", hjust = 0.5),
+      plot.subtitle    = element_text(hjust = 0.5),
+      panel.grid.minor = element_blank()
+    )
+)
+```
+
+# 1. 데이터 불러오기 및 전처리
+
+```{r data-import}
+
+#### 1) 파일 경로 -----------------------------------------------------------
+in_path <- "C:/Users/Tae/Downloads/강릉강수량_s.csv"
+
+#### 2) CSV 읽기 (EUC-KR) ---------------------------------------------------
+df_raw <- readr::read_csv(
+  file = in_path,
+  locale = locale(encoding = "EUC-KR"),
+  show_col_types = FALSE
+)
+
+#### 3) 열 매핑: 날짜/일시 열, 강수량 열 -----------------------------------
+date_candidates <- c("일시","날짜","date","DATE","Date")
+date_col <- intersect(date_candidates, names(df_raw))[1]
+if (is.na(date_col)) stop("날짜/일시 열을 찾지 못했습니다. (예: '일시', '날짜', 'date')")
+
+prec_candidates <- c("강수량(mm)","강수량","precip","rain")
+prec_col <- intersect(prec_candidates, names(df_raw))[1]
+if (is.na(prec_col)) stop("강수량 열을 찾지 못했습니다. (예: '강수량(mm)', '강수량', 'precip')")
+
+df <- df_raw %>%
+  rename(
+    datetime_kr = !!date_col,
+    precip_raw  = !!prec_col
+  )
+
+#### 4) '1911년 10월' 형식 파서 --------------------------------------------
+parse_year_month_kr <- function(x) {
+  s <- trimws(as.character(x))
+
+  yr <- suppressWarnings(as.integer(stringr::str_match(s, "([0-9]{3,4})\\s*년")[,2]))
+  mo <- suppressWarnings(as.integer(stringr::str_match(s, "([0-9]{1,2})\\s*월")[,2]))
+
+  yr[is.na(yr) | yr < 0] <- NA_integer_
+  mo[is.na(mo) | mo < 1 | mo > 12] <- NA_integer_
+
+  out <- ifelse(!is.na(yr) & !is.na(mo),
+                sprintf("%04d-%02d-01", yr, mo),
+                NA_character_)
+  as.Date(out)
+}
+
+df$date <- parse_year_month_kr(df$datetime_kr)
+
+if (any(is.na(df$date))) {
+  warning(sprintf("날짜 변환 실패 %d건이 있습니다. (총 %d건)",
+                  sum(is.na(df$date)), nrow(df)))
+}
+
+
+# 1-5) 강수량 숫자화 및 월별 집계 -------------------------------------------
+df <- df %>%
+  mutate(precip = suppressWarnings(as.numeric(precip_raw))) %>%
+  filter(!is.na(date), !is.na(precip)) %>%
+  mutate(month_start = floor_date(date, "month")) %>%
+  group_by(month_start) %>%
+  summarise(precip = sum(precip, na.rm = TRUE), .groups = "drop") %>%
+  arrange(month_start) %>%
+  rename(date = month_start)
+
+stopifnot(nrow(df) > 0)
+
+cat(sprintf("데이터 범위: %s ~ %s, 관측치: %d
+",
+            format(min(df$date), "%Y-%m"),
+            format(max(df$date), "%Y-%m"),
+            nrow(df)))
+
+# 시간 인덱스와 월 요인 추가 ------------------------------------------------
+df <- df %>%
+  mutate(
+    t         = seq_along(date),
+    month_num = month(date),
+    month_fac = factor(month_num, levels = 1:12,
+                       labels = sprintf("%02d월", 1:12))
+  )
+```
+
+# 2. 원자료 시각화 및 기초 탐색
+
+```{r raw-plot}
+# 2-1) 시계열 플롯 -----------------------------------------------------------
+p_ts <- ggplot(df, aes(x = date, y = precip)) +
+  geom_line(linewidth = 0.7) +
+  geom_point(size = 0.7) +
+  labs(
+    title = "강릉 월별 강수량 (원자료)",
+    x = sprintf("날짜 (%s ~ %s)",
+                format(min(df$date), "%Y.%m"),
+                format(max(df$date), "%Y.%m")),
+    y = "강수량 (mm)"
+  )
+
+# 2-2) 월별 박스플롯 (계절성 확인) ------------------------------------------
+p_box <- ggplot(df, aes(x = month_fac, y = precip)) +
+  geom_boxplot(outlier.alpha = 0.5) +
+  labs(
+    title = "월별 강수량 분포 (계절성 확인)",
+    x = "월",
+    y = "강수량 (mm)"
+  )
+
+p_ts
+p_box
+```
+
+# 3. Gamma 분포 적합 및 GOF 검정
+
+```{r gamma-fit}
+y <- df$precip
+cat("min precipitation:", min(y), "
+")
+cat("0mm 개수:", sum(y == 0), "
+")
+
+# Gamma 분포는 y>0 구간에서 적합 -------------------------------------------
+y_pos <- y[y > 0]
+if (length(y_pos) < 10) {
+  stop("양수 강수량 관측이 너무 적어서 Gamma 분포 적합이 어렵습니다.")
+}
+
+fit_gamma <- fitdist(y_pos, "gamma")
+
+cat("
+==== Gamma 분포 적합 결과 ====
+")
+fit_gamma
+
+gof_gamma <- gofstat(fit_gamma)
+
+cat("
+==== Gamma 분포 GOF 통계량 ====
+")
+cat("Kolmogorov-Smirnov statistic (ks):", gof_gamma$ks, "
+")
+cat("KS test 결과:", gof_gamma$kstest, "
+")
+cat("Cramer-von Mises (cvm):", gof_gamma$cvm, "
+")
+cat("Anderson-Darling (ad):", gof_gamma$ad, "
+")
+cat("Chi-square statistic:", gof_gamma$chisq, "
+")
+cat("Chi-square df:", gof_gamma$chisqdf, "
+")
+cat("Chi-square p-value:", gof_gamma$chisqpvalue, "
+")
+cat("AIC:", gof_gamma$aic, "
+")
+cat("BIC:", gof_gamma$bic, "
+")
+
+cat("
+==== Chi-square 관측/이론 도수표 (일부) ====
+")
+head(gof_gamma$chisqtable, 10)
+```
+
+```{r gamma-diagnostic-plots, fig.width=7, fig.height=6}
+par(mfrow = c(2, 2))
+plot(fit_gamma)  # hist+dens, QQ, CDF, P-P
+par(mfrow = c(1, 1))
+```
+
+# 4. Gamma GLM (계절 더미 + AR) 적합
+
+```{r gamma-glm-fit}
+# 4-1) Gamma GLM에 사용할 y_gamma (0 보정) -----------------------------------
+eps_gamma <- 0.01
+df <- df %>%
+  mutate(
+    y_gamma = ifelse(precip <= 0, eps_gamma, precip)
+  )
+
+# 4-2) lag 변수 생성 (최대 lag 2) --------------------------------------
+df_model <- df %>%
+  arrange(date) %>%
+  mutate(
+    y_lag1 = dplyr::lag(y_gamma, 1),
+    y_lag2 = dplyr::lag(y_gamma, 2)
+  ) %>%
+  # 모든 후보 모형이 동일한 데이터 사용: lag1, lag2 모두 있는 행만 사용
+  filter(!is.na(y_lag1), !is.na(y_lag2))
+
+nrow(df_model)
+
+# 4-3) 후보 모형: 계절 더미 + lag 구조 --------------------------------------
+fit_gamma_s0   <- glm(
+  y_gamma ~ month_fac,
+  family = Gamma(link = "log"),
+  data   = df_model
+)
+
+fit_gamma_ar1  <- glm(
+  y_gamma ~ month_fac + y_lag1,
+  family = Gamma(link = "log"),
+  data   = df_model
+)
+
+fit_gamma_ar2  <- glm(
+  y_gamma ~ month_fac + y_lag2,
+  family = Gamma(link = "log"),
+  data   = df_model
+)
+
+fit_gamma_ar12 <- glm(
+  y_gamma ~ month_fac + y_lag1 + y_lag2,
+  family = Gamma(link = "log"),
+  data   = df_model
+)
+
+# 4-4) AIC 비교 및 최적 모형 선택 -------------------------------------------
+aic_table <- AIC(fit_gamma_s0, fit_gamma_ar1, fit_gamma_ar2, fit_gamma_ar12)
+cat("
+==== Gamma GLM 후보 모형 AIC 비교 ====
+")
+aic_table
+
+best_name <- rownames(aic_table)[which.min(aic_table$AIC)]
+cat("
+선택된 모형(최소 AIC):", best_name, "
+")
+
+best_model <- switch(
+  best_name,
+  "fit_gamma_s0"   = fit_gamma_s0,
+  "fit_gamma_ar1"  = fit_gamma_ar1,
+  "fit_gamma_ar2"  = fit_gamma_ar2,
+  "fit_gamma_ar12" = fit_gamma_ar12
+)
+
+cat("
+==== 선택된 Gamma GLM 모형 요약 ====
+")
+summary(best_model)
+```
+
+```{r gamma-glm-residuals, fig.width=7, fig.height=6}
+
+df_model <- df_model %>%
+  dplyr::mutate(
+    raw_resid = y_gamma - fitted(best_model)
+  )
+
+par(mfrow = c(2, 2))
+plot(df_model$date, df_model$raw_resid, type = "l",
+     main = "Residual (Gamma GLM)",
+     xlab = "Date", ylab = "residual")
+abline(h = 0, col = "red", lty = 2)
+
+acf(df_model$raw_resid, main = "ACF of residuals")
+
+qqnorm(df_model$raw_resid); qqline(df_model$raw_resid)
+hist(df_model$raw_resid, breaks = 30,
+     main = "Histogram of residuals")
+par(mfrow = c(1, 1))
+```
+
+# 5. 잔차(Residual)에 ARMA 모형 적합
+
+이제 **“Gamma GLM + 잔차 ARMA”** 구조를 만들기 위해  
+방금 얻은 residual에 대해 ARMA(p, q)를 적합한다.
+
+```{r arma-on-residuals}
+res_dev <- df_model$raw_resid
+
+# 5-1) auto.arima를 이용한 ARMA(p,q) 선택 -----------------------------------
+fit_res_arma <- auto.arima(
+  res_dev,
+  seasonal  = FALSE,  # 월자료에서 계절성은 이미 month_fac로 설명했으므로 FALSE
+  stepwise  = TRUE,
+  approximation = FALSE
+)
+
+cat("
+==== Deviance residual ARMA 모형 ====
+")
+fit_res_arma
+
+# 5-2) 잔차 ARMA 진단 --------------------------------------------------------
+checkresiduals(fit_res_arma)
+```
+
+> 해석 포인트:
+> - Gamma GLM가 **분포 + 계절성 + (필요하다면) AR(lag)**를 설명하고,  
+> - deviance residual에 대한 ARMA 모형이 **남아 있는 시계열 의존 구조(AR + MA)** 를 설명한다.  
+> - `checkresiduals()`의 ACF와 Ljung-Box p-value가 양호하면  
+>   “Gamma GLM + 잔차 ARMA” 구조로 충분히 설명되었다고 볼 수 있다.
+
+# 6. 예측: Gamma GLM 평균 + 잔차 ARMA
+
+이 섹션에서는 간단한 방식으로
+
+- (1) **Gamma GLM 평균 예측**  
+- (2) **잔차 ARMA 예측**  
+
+을 결합해, **최종 예측값**을 구성하는 예시를 보인다.
+
+
+
+
+```{r}
+# 1. 모델 적합값(Fitted)과 표준화 잔차(Standardized Residual) 추출
+# rstandard()를 쓰면 오차의 크기를 통계적 표준편차 단위(Sigma)로 바꿔줍니다.
+df_model$fitted_val <- fitted(best_model)
+df_model$std_resid  <- rstandard(best_model)
+
+# 2. 이상치 기준 설정 (보통 2.5 시그마 이상이면 강력한 이상치)
+threshold <- 2 
+
+# 3. 이상치 데이터만 발췌 (Abs가 threshold보다 큰 경우)
+# 예측보다 비가 '엄청 많이' 왔거나(양수), '너무 안 온'(음수) 경우
+outliers <- df_model[abs(df_model$std_resid) > threshold, ]
+
+# 날짜와 강수량, 잔차 확인
+cat(sprintf("==== 감지된 기상 이변 (Threshold: %.1f Sigma) ====\n", threshold))
+print(outliers[ , c("date", "precip", "fitted_val", "std_resid")])
+```
+```{r}
+library(ggplot2)
+library(ggrepel) # 텍스트가 겹치지 않게 해주는 패키지 (없으면 생략 가능)
+
+# 텍스트 라벨용 데이터 (이상치인 경우만 날짜 표시)
+# ggrepel이 없다면 geom_text를 쓰거나 생략하세요.
+if(!requireNamespace("ggrepel", quietly = TRUE)) install.packages("ggrepel")
+library(ggrepel)
+
+ggplot(df_model, aes(x = date, y = precip)) +
+  # 1. 전체 시계열 (회색 실선)
+  geom_line(color = "gray70", size = 0.8) +
+  
+  # 2. 모델이 예측한 '평년 수준' (파란 점선)
+  #geom_line(aes(y = fitted_val), color = "blue", linetype = "dashed", size = 0.8, alpha = 0.6) +
+  
+  # 3. 감지된 이상치 (빨간 점으로 강조)
+  geom_point(data = outliers, aes(x = date, y = precip), 
+             color = "red", size = 3, shape = 21, fill = "orange") +
+  
+  # 4. 이상치 날짜 라벨링 (언제였는지 표시)
+  geom_text_repel(data = outliers, aes(label = format(date, "%Y-%m")),
+                  box.padding = 0.5, point.padding = 0.5, color = "red", fontface = "bold") +
+  
+  labs(
+    title = "과거 기상 이변 탐지 (Anomaly Detection)",
+    subtitle = " 빨간 점: 예측을 벗어난 기상 이변",
+    x = "연도",
+    y = "강수량 (mm)"
+  ) +
+  theme_minimal()
+```
+
+
+
+
+```{r forecast-combined}
+# ARMA(0,0,0)이므로 GLM 예측만 수행
+
+h <- 15
+#last_date <- tail(df_model)
+last_date <- df_model[320,]$date
+
+# 1. 미래 날짜 데이터프레임 생성
+future_dates <- seq(
+  from = last_date %m+% months(1),
+  by   = "1 month",
+  length.out = h
+)
+
+future_df <- data.frame(
+  date      = future_dates,
+  month_num = month(future_dates)
+) %>%
+  dplyr::mutate(
+    month_fac = factor(month_num,
+                       levels = 1:12,
+                       labels = levels(df$month_fac))
+  )
+
+# 2. Lag 변수 사용 여부 확인
+term_labels <- attr(terms(best_model), "term.labels")
+use_lag1 <- "y_lag1" %in% term_labels
+use_lag2 <- "y_lag2" %in% term_labels
+
+pred_gamma_final <- numeric(h)
+
+# 3. 마지막 관측치 가져오기 (초기값 설정)
+last_row <- tail(df_model, 1)
+#last_row <- df_model[1,]
+
+prev1 <- last_row$y_gamma 
+prev2 <- last_row$y_lag1
+
+# 4. 예측 루프 (강제 exp 적용)
+for (i in 1:h) {
+  curr_data <- future_df[i, , drop = FALSE]
+  
+  # Lag 변수 채워넣기
+  if (use_lag1) curr_data$y_lag1 <- prev1
+  if (use_lag2) curr_data$y_lag2 <- prev2
+  # type 설정 없이 그냥 예측값을 뽑고, 강제로 지수변환(exp) 합니다.
+  raw_pred <- predict(best_model, newdata = curr_data)
+  
+
+  pred_mm <- as.numeric(exp(raw_pred))
+  # -------------------------------------------------------------------
+  
+  pred_gamma_final[i] <- pred_mm
+
+  # 다음 달 예측을 위해 lag 업데이트 (mm 단위로 넘김)
+  prev2 <- prev1
+  prev1 <- pred_mm 
+}
+
+# 5. 결과 정리
+final_forecast <- future_df %>%
+  dplyr::mutate(
+    pred_log    = log(pred_gamma_final), # 참고용 로그값
+    pred_precip = pred_gamma_final,      # 실제 강수량(mm)
+    type        = "forecast"
+  )
+
+# 결과 확인 (이제 100mm 단위로 나올 것입니다)
+print(final_forecast)
+```
+
+
+### plot
+
+```{r}
+library(ggplot2)
+library(dplyr)
+
+# 1. 데이터 준비 (select 안 쓰고 직접 열 생성)
+# (1) 과거 데이터
+hist_data <- df
+hist_data$type <- "Observation"
+
+# (2) 예측 데이터 (열 이름 통일)
+pred_data <- final_forecast
+pred_data$precip <- pred_data$pred_precip  # 'precip'이라는 이름으로 복사
+pred_data$type <- "Forecast"
+
+# 2. 행 결합 (bind_rows는 열 이름이 같은 것끼리 알아서 합쳐줍니다)
+# 공통된 열: date, precip, type
+plot_df <- bind_rows(hist_data, pred_data)
+
+# 3. 시각화 (최근 5년 ~ 예측 1년)
+# 5년 전 날짜 계산
+start_date <- max(df$date) - years(10)
+
+ggplot(plot_df[plot_df$date >= start_date, ], aes(x = date, y = precip, color = type)) +
+  geom_line(linewidth = 1) +
+  geom_point(size = 2) +
+  # 예측 시작 지점에 점선 표시
+  geom_vline(xintercept = as.numeric(min(pred_data$date)), 
+             linetype = "dashed", color = "gray50") +
+  scale_color_manual(values = c("Observation" = "steelblue", "Forecast" = "firebrick")) +
+  labs(
+    title = "강릉 강수량 추세 비교",
+    subtitle = "실제 관측(파랑) vs Gamma GLM 예측(빨강)",
+    x = "날짜", 
+    y = "강수량 (mm)"
+  ) +
+  theme_minimal()
+```
+
+# 7. 요약 정리 (보고서용 정리 포인트)
+
+- (1) **분포 적합**  
+  - 원자료 강수량 중 \( Y_t > 0 \)에 대해 Gamma 분포를 적합  
+  - GOF(KS, AD, CVM, 카이제곱) 결과에서 기각되지 않으면  
+    “강수량은 (0 이상 구간에서) Gamma 분포 가정이 타당하다”고 정리
+
+- (2) **Gamma GLM (계절 더미 + AR(lag))**  
+  - 링크 함수: \( \log(\mu_t) \)  
+  - 설명 변수: 월 더미(계절성), 필요시 \( Y_{t-1}, Y_{t-2} \) 등 lag  
+  - AIC를 이용해 여러 후보 모형 중 최적 모형 선택  
+  - deviance residual 진단(ACF, QQ, histogram)을 통해 평균 구조의 적합성 점검
+
+- (3) **잔차 ARMA 모형**  
+  - 선택된 Gamma GLM의 deviance residual \( r_t \)에 대해 ARMA(p, q) 적합  
+  - `auto.arima()`를 활용하여 p, q 선택  
+  - `checkresiduals()`를 통해 잔차의 white noise 여부 확인  
+  - 이 과정을 통해 “Gamma 기반 평균 구조 + ARMA 의존 구조”를 함께 모형화했다고 해석 가능
+
+- (4) **예측**  
+  - Gamma GLM 기반의 계절 평균 예측 \( \hat{\mu}_t \)에  
+  - 잔차 ARMA 예측을 조합하여,  
+  - “Gamma 분포를 따르면서 시계열 의존성까지 반영한 예측”을 제시할 수 있음.
