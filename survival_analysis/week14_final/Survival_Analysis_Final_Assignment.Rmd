@@ -1,6 +1,6 @@
 ---
 title: "Final Assignment Survival Analysis"
-author: "202430527 이태녕녕"
+author: "202430527 이태녕"
 date: "`r Sys.Date()`"
 output:
   html_document:
@@ -47,7 +47,7 @@ colnames(pbc_raw) <- c("fu.days", "status", "drug", "age_days", "sex",
 # 3. 전처리 및 변환
 pbc_clean <- pbc_raw %>%
   mutate(
-    age = age_days / 365.25,
+    age = age_days / 365,
     drug_f = factor(drug, levels = c(0, 1), labels = c("DPCA", "Placebo")),
     sex_f = factor(sex, levels = c(0, 1), labels = c("Male", "Female")),
     ascites_f = factor(ascites, levels = c(0, 1), labels = c("No", "Yes")),
@@ -55,18 +55,46 @@ pbc_clean <- pbc_raw %>%
     edema_f = factor(edema, levels = c(0, 1, 2), labels = c("No Edema", "Untreated", "Resistant"))
   ) %>%
   select(-age_days)
+pbc_clean$status_f <- factor(pbc_clean$status, levels = c(0, 1),
+                             labels = c("Censored", "Event"))
 
 # 4. 기술통계량 
-stats_table <- pbc_clean %>%
-  summarise(
-    N = n(),
-    Mean_Age = round(mean(age), 2),
-    Mean_Bili = round(mean(bili), 2),
-    Events = sum(status)
-  )
+## 연속형
+cont_vars <- c("fu.days", "age", "bili", "albumin", "alk.phos", "sgot", "platelet", "protime")
 
-print("--- 기초 통계량 요약 ---")
-print(stats_table)
+cont_desc <- do.call(rbind, lapply(cont_vars, function(v){
+  x <- pbc_clean[[v]]
+  c(
+    N = sum(!is.na(x)),
+    Mean = mean(x, na.rm = TRUE),
+    SD = sd(x, na.rm = TRUE),
+    Median = median(x, na.rm = TRUE),
+    Q1 = unname(quantile(x, 0.25, na.rm = TRUE)),
+    Q3 = unname(quantile(x, 0.75, na.rm = TRUE)),
+    Min = min(x, na.rm = TRUE),
+    Max = max(x, na.rm = TRUE)
+  )
+}))
+
+cont_desc <- data.frame(Variable = cont_vars, round(cont_desc, 3), row.names = NULL)
+print(cont_desc)
+
+##범주형
+cat_vars <- c("status_f", "drug_f", "sex_f", "ascites_f", "hepatom_f", "edema_f")
+
+cat_desc <- do.call(rbind, lapply(cat_vars, function(v){
+  x <- pbc_clean[[v]]
+  tab <- table(x, useNA = "ifany")
+  prop <- prop.table(tab)
+  data.frame(
+    Variable = v,
+    Level = names(tab),
+    Count = as.integer(tab),
+    Percent = round(100 * as.numeric(prop), 1),
+    row.names = NULL
+  )
+}))
+print(cat_desc)
 ```
 
 ## 전체 생존 곡선 (Kaplan-Meier)
@@ -161,6 +189,65 @@ print("--- Schoenfeld 잔차 검정 결과 ---")
 print(ph_results)
 ```
 
+## loglog Plots
+
+```{r loglogplot}
+plot_cloglog <- function(var, data, time = "fu.days", event = "status", ngroup = 4){
+  x <- data[[var]]
+
+  # 연속형이면 분위수로 그룹화
+  if (is.numeric(x) && length(unique(x)) > 6) {
+    qs <- unique(quantile(x, probs = seq(0, 1, length.out = ngroup + 1), na.rm = TRUE))
+    if (length(qs) < 3) {
+      grp <- factor(x)
+      grp_name <- paste0(var, " (as factor)")
+    } else {
+      grp <- cut(x, breaks = qs, include.lowest = TRUE)
+      grp_name <- paste0(var, " (quartiles)")
+    }
+  } else {
+    grp <- factor(x)
+    grp_name <- var
+  }
+
+  tmp <- data
+  tmp$.__grp__ <- grp
+
+  f <- as.formula(paste0("Surv(", time, ",", event, ") ~ .__grp__"))
+  fit <- survfit(f, data = tmp)
+
+  # strata 개수
+  n <- if (is.null(fit$strata)) 1 else length(fit$strata)
+
+  # 선 스타일/색을 strata마다 다르게
+  lty_vec <- rep(1:6, length.out = n)   # 1~6 반복
+  col_vec <- 1:n                       # 1,2,3,... (기본 팔레트)
+
+  plot(fit,
+       fun = "cloglog", log = "x",
+       lty = lty_vec, col = col_vec, lwd = 2,
+       xlab = "Time (Days, log scale)",
+       ylab = "log(-log(S(t)))",
+       main = paste0("log(-log(S(t))) plot: ", grp_name))
+
+  legend("topleft", legend = levels(grp),
+         lty = lty_vec, col = col_vec, lwd = 2, bty = "n")
+}
+
+covariates_for_plot <- c(
+  "drug_f", "age", "sex_f", "ascites_f", "hepatom_f", "edema_f",
+  "bili", "albumin", "alk.phos", "sgot", "platelet", "protime"
+)
+
+op <- par(mfrow = c(2, 2))
+for (v in covariates_for_plot) {
+  plot_cloglog(v, pbc_clean)
+}
+par(op)
+```
+
+
+
 ##  변수 분류
 
 유의수준 0.05 기준으로 변수를 분류하였다.
@@ -206,6 +293,8 @@ print(final_table)
 
 1.  **Age (나이)**: HR이 1보다 크며 통계적으로 유의하다. 나이가 증가할수록 사망 위험이 증가한다.
 2.  **Albumin**: HR이 1보다 작고 유의하다. 알부민 수치가 높을수록 사망 위험이 감소한다.
+3.  **Ascites (복수)**: HR이 3에 가까우며 복수가 있는 환자(1)는 없는 환자(0)에 비해 사망 위험이 높다.
+4.  **Hepatom (간비대)**: HR이 2에 가까우며 간비대가 있는 환자(1)는 없는 환자(0)에 비해 사망 위험이 높다.
 
 ## 확장 Cox 모형 (Extended Cox Model)
 
@@ -264,7 +353,7 @@ print(comp_df)
 최종 모형(시각화를 위해 표준 모형 기준)에 대한 잔차를 확인하였다.
 
 ```{r diagnostics}
-par(mfrow=c(1,3))
+par(mfrow=c(1,2))
 # 1. Martingale Residuals
 res_mart <- residuals(fit_std, type = "martingale")
 plot(pbc_clean$albumin, res_mart, main = "Martingale vs Albumin",
@@ -278,16 +367,40 @@ plot(res_dev, type = "h", main = "Deviance Residuals",
      xlab = "Index", ylab = "Residuals")
 abline(h=c(-2,2), col="red", lty=2)
 
+fit_final <- fit_ext
+par(mfrow=c(1,1))
+
+# dfbeta: (n x p) 행렬
+dfb <- residuals(fit_final, type = "dfbeta")
+
+# 계수 이름(= dfbeta 열의 정체)을 모형에서 가져오기
+cn <- names(coef(fit_final))
+
+# 길이 맞으면 그대로 붙이기
+colnames(dfb) <- cn
+
+# 변수별로 |dfbeta| 최대값 큰 관측치 확인
+max_abs <- apply(abs(dfb), 2, max)
+sort(max_abs, decreasing=TRUE)
+
+# 가장 영향 큰 계수 하나를 골라 plot
+j <- which.max(max_abs)
+plot(dfb[, j], type="h", main=paste0("dfbeta for ", colnames(dfb)[j]),
+     xlab="Index", ylab="dfbeta")
+abline(h=c(-0.2,0.2), lty=2)
+
 ```
 
 ## 최종 결론
 
-1.  **유의한 변수**: 다변량 분석 결과 **Bilirubin, Protime, Age, Albumin, Edema** 등이 생존에 유의한 영향을 미치는 것으로 나타났다.
+1.  **유의한 변수**: 확장 Cox 모형에서 Age(+), Albumin(−), Hepatom(+), **SGOT(+)**가 유의했으며, PH 위배 변수인 Edema, Bilirubin, Protime은 log(time)과의 상호작용항(tt)이 유의하여 시간에 따라 효과가 변하는(time-varying) 위험요인임을 시사한다.
 2.  **영향의 방향**:
-      * **위험 요인 (HR \> 1)**: Age, Bilirubin, Protime, Edema (수치가 높을수록 위험)
-      * **보호 요인 (HR \< 1)**: Albumin (수치가 높을수록 위험 감소)
+      * Age: 1년 증가할수록 위험 증가(HR>1). 
+      * Albumin: 수치가 높을수록 위험 감소(HR<1). 
+      * Hepatom: 간비대가 있는 경우 위험 증가. 
+      * Edema/Bilirubin/Protime: $\beta(t) = \theta log(t)$ 형태의 상호작용이 유의하고 θ>0이므로, 시간이 지날수록(추적 시간이 길어질수록) 해당 변수 증가가 위험을 더 크게 키운다.
 3.  **모형 선택**: 일부 변수의 비례위험 가정 위배를 해결하기 위해 **확장 Cox 모형**을 적용하였으며, 이는 표준 모형 대비 개선된 적합도(낮은 AIC)를 보였다.
 
 
-[![View on GitHub](https://img.shields.io/badge/GitHub-Repository-blue?logo=github)](https://github.com/Taenyoung-Lee/assignments/blob/main/survival_analysis/week14_final/Survival_Analysis_Final_Assignment.rmd)
+[![View on GitHub](https://img.shields.io/badge/GitHub-Repository-blue?logo=github)](https://github.com/Taenyoung-Lee/assignments/blob/main/survival_analysis/week14_final/Survival_Analysis_Final_Assignment.Rmd)
 
