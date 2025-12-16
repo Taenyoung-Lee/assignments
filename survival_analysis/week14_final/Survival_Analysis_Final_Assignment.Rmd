@@ -1,0 +1,293 @@
+---
+title: "Final Assignment Survival Analysis"
+author: "202430527 이태녕녕"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    toc: true
+    toc_depth: 3
+    number_sections: true
+    toc_float: true
+    df_print: paged
+    code_folding: hide
+    theme: readable
+fontsize: 11pt
+geometry: margin=1in
+always_allow_html: true
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE, fig.width=8, fig.height=6)
+
+# 필요한 패키지 로드
+library(survival)
+library(dplyr)
+```
+
+# 예비 분석 및 Kaplan-Meier 곡선
+
+## 데이터 로드 및 전처리
+
+본 데이터는 원발성 담즙성 간경변증(PBC) 임상 시험 자료로 총 308개의 관측치와 14개의 변수로 구성된다. 문제에서 제시된 코딩 기준에 따라 데이터를 전처리하였다.
+
+  * **Status**: 0=중도절단(Censored), 1=사망(Event)
+  * **Age**: 일(Days) 단위를 연(Years) 단위로 환산
+  * **범주형 변수**: 분석 용이성을 위해 Factor 변환 및 라벨링 수행
+
+```{r data-processing}
+# 1. 데이터 로드
+pbc_raw <- read.table("PBC_data.txt", header = FALSE)
+
+# 2. 변수명 지정
+colnames(pbc_raw) <- c("fu.days", "status", "drug", "age_days", "sex", 
+                       "ascites", "hepatom", "edema", "bili", "albumin", 
+                       "alk.phos", "sgot", "platelet", "protime")
+
+# 3. 전처리 및 변환
+pbc_clean <- pbc_raw %>%
+  mutate(
+    age = age_days / 365.25,
+    drug_f = factor(drug, levels = c(0, 1), labels = c("DPCA", "Placebo")),
+    sex_f = factor(sex, levels = c(0, 1), labels = c("Male", "Female")),
+    ascites_f = factor(ascites, levels = c(0, 1), labels = c("No", "Yes")),
+    hepatom_f = factor(hepatom, levels = c(0, 1), labels = c("No", "Yes")),
+    edema_f = factor(edema, levels = c(0, 1, 2), labels = c("No Edema", "Untreated", "Resistant"))
+  ) %>%
+  select(-age_days)
+
+# 4. 기술통계량 
+stats_table <- pbc_clean %>%
+  summarise(
+    N = n(),
+    Mean_Age = round(mean(age), 2),
+    Mean_Bili = round(mean(bili), 2),
+    Events = sum(status)
+  )
+
+print("--- 기초 통계량 요약 ---")
+print(stats_table)
+```
+
+## 전체 생존 곡선 (Kaplan-Meier)
+
+전체 환자의 생존 함수 추정 결과는 아래와 같다.
+
+```{r km-overall}
+fit_overall <- survfit(Surv(fu.days, status) ~ 1, data = pbc_clean)
+
+plot(fit_overall, 
+     main = "Overall Kaplan-Meier Survival Curve",
+     xlab = "Time (Days)", ylab = "Survival Probability",
+     col = "darkblue", lwd = 2, conf.int = TRUE)
+grid()
+abline(h = 0.5, col = "red", lty = 2)
+```
+
+## 범주형 변수별 KM 곡선 및 로그랭크 검정
+
+### 치료제(Drug) 효과 분석
+
+```{r km-drug}
+fit_drug <- survfit(Surv(fu.days, status) ~ drug_f, data = pbc_clean)
+
+plot(fit_drug, col = c("blue", "red"), lwd = 2,
+     main = "Survival by Drug", 
+     xlab = "Time (Days)", ylab = "Survival Probability")
+legend("bottomleft", legend = levels(pbc_clean$drug_f), col = c("blue", "red"), lty = 1, lwd = 2)
+grid()
+
+# Log-rank test
+sd_drug <- survdiff(Surv(fu.days, status) ~ drug, data = pbc_clean)
+print(sd_drug)
+```
+
+**해석**: 로그랭크 검정 결과 p-value가 0.05보다 크다. 따라서 DPCA 투여군과 위약(Placebo)군 간의 생존율 차이는 통계적으로 유의하지 않다.
+
+### 부종(Edema) 상태 분석
+
+```{r km-edema}
+fit_edema <- survfit(Surv(fu.days, status) ~ edema_f, data = pbc_clean)
+
+plot(fit_edema, col = c("forestgreen", "orange", "firebrick"), lwd = 2,
+     main = "Survival by Edema", 
+     xlab = "Time (Days)", ylab = "Survival Probability")
+legend("bottomleft", legend = levels(pbc_clean$edema_f), 
+       col = c("forestgreen", "orange", "firebrick"), lty = 1, lwd = 2)
+grid()
+
+# Log-rank test
+sd_edema <- survdiff(Surv(fu.days, status) ~ edema, data = pbc_clean)
+print(sd_edema)
+```
+
+**해석**: 로그랭크 검정 결과 p-value가 매우 작게 나타났다($p < 0.001$). 부종 상태에 따라 생존율에 유의한 차이가 존재한다.
+
+-----
+
+# 비례위험(PH) 가정 검정
+
+## 단변량 Cox 모형 및 Schoenfeld 잔차
+
+각 변수에 대해 단변량 Cox 모형 적합 후 `cox.zph`를 이용해 PH 가정을 검정하였다.
+
+```{r ph-check}
+covariates <- c("drug", "age", "sex", "ascites", "hepatom", "edema", 
+                "bili", "albumin", "alk.phos", "sgot", "platelet", "protime")
+
+ph_results <- data.frame(Variable = character(), P_Value = numeric(), Status = character(), stringsAsFactors = FALSE)
+
+par(mfrow = c(2, 2))
+for(var in covariates) {
+  f <- as.formula(paste("Surv(fu.days, status) ~", var))
+  fit <- coxph(f, data = pbc_clean)
+  zph <- cox.zph(fit)
+  p_val <- zph$table[1, 3]
+  
+  ph_results[nrow(ph_results) + 1, ] <- list(
+    var, 
+    round(p_val, 4), 
+    ifelse(p_val > 0.05, "Satisfied", "Violated")
+  )
+  
+  # P-value < 0.1 인 경우 잔차 plot 확인
+  if(p_val < 0.1) {
+     plot(zph, main = paste("Schoenfeld:", var), df=2)
+  }
+}
+par(mfrow = c(1, 1))
+
+print("--- Schoenfeld 잔차 검정 결과 ---")
+print(ph_results)
+```
+
+##  변수 분류
+
+유의수준 0.05 기준으로 변수를 분류하였다.
+
+```{r categorization}
+vars_ok <- ph_results$Variable[ph_results$Status == "Satisfied"]
+vars_no <- ph_results$Variable[ph_results$Status == "Violated"]
+
+cat("PH 가정 만족 (표준 Cox 모형):", paste(vars_ok, collapse = ", "), "\n")
+cat("PH 가정 위배 (확장 Cox 모형):", paste(vars_no, collapse = ", "), "\n")
+```
+
+-----
+
+# 생존 모형 구축
+
+## 다변량 Cox PH 모형 (표준)
+
+PH 가정을 만족하는 변수만을 사용하여 다변량 모형을 적합하였다.
+
+```{r cox-standard}
+f_multi <- as.formula(paste("Surv(fu.days, status) ~", paste(vars_ok, collapse = " + ")))
+fit_std <- coxph(f_multi, data = pbc_clean)
+
+# 결과 정리
+res_std <- summary(fit_std)$coefficients
+res_conf <- summary(fit_std)$conf.int
+
+final_table <- data.frame(
+  Variable = rownames(res_std),
+  Coef = round(res_std[,1], 4),
+  HR = round(res_std[,2], 4),
+  Lower_95 = round(res_conf[,3], 4),
+  Upper_95 = round(res_conf[,4], 4),
+  P_Value = round(res_std[,5], 4)
+)
+
+print("--- 다변량 Cox 모형 결과 (PH 만족 변수) ---")
+print(final_table)
+```
+
+### 주요 결과 해석
+
+1.  **Age (나이)**: HR이 1보다 크며 통계적으로 유의하다. 나이가 증가할수록 사망 위험이 증가한다.
+2.  **Albumin**: HR이 1보다 작고 유의하다. 알부민 수치가 높을수록 사망 위험이 감소한다.
+
+## 확장 Cox 모형 (Extended Cox Model)
+
+PH 가정을 위배한 변수(**`r paste(vars_no, collapse=", ")`**)에 대해 시간 상호작용항($\beta(t) = \beta + \theta \ln(t)$)을 추가한 확장 모형을 적합하였다.
+
+```{r extended-cox}
+if(length(vars_no) > 0) {
+  # 기본 식에 tt(위배변수) 추가
+  form_ext_str <- paste("Surv(fu.days, status) ~", paste(vars_ok, collapse = " + "))
+  
+  for(v in vars_no) {
+    form_ext_str <- paste(form_ext_str, "+ tt(", v, ")")
+  }
+  
+  fit_ext <- coxph(as.formula(form_ext_str), 
+                   data = pbc_clean,
+                   tt = function(x, t, ...) x * log(t))
+  
+  # 결과 일부 출력
+  coef_ext <- summary(fit_ext)$coefficients
+  
+  print("--- 확장 Cox 모형 계수 (시간 상호작용항 포함) ---")
+  print(round(coef_ext[, c(1, 2, 5)], 4))
+  
+} else {
+  fit_ext <- fit_std
+  print("PH 위배 변수 없음.")
+}
+```
+
+## 모형 비교
+
+AIC를 기준으로 두 모형의 적합도를 비교한다.
+
+```{r comparison}
+aic_std <- AIC(fit_std)
+aic_ext <- AIC(fit_ext)
+
+comp_df <- data.frame(
+  Model = c("Standard Cox", "Extended Cox"),
+  AIC = round(c(aic_std, aic_ext), 2)
+)
+
+print("--- Model Comparison by AIC ---")
+print(comp_df)
+```
+
+**결론**: 확장 Cox 모형의 AIC가 더 낮다. 해당 변수들의 시간 가변성을 고려하는 것이 타당하다는 것을 의미한다.
+
+-----
+
+#  모형 진단 및 결론
+
+##  잔차 분석
+
+최종 모형(시각화를 위해 표준 모형 기준)에 대한 잔차를 확인하였다.
+
+```{r diagnostics}
+par(mfrow=c(1,3))
+# 1. Martingale Residuals
+res_mart <- residuals(fit_std, type = "martingale")
+plot(pbc_clean$albumin, res_mart, main = "Martingale vs Albumin",
+     xlab = "Albumin", ylab = "Residuals", pch = 20, col = "gray")
+lines(lowess(pbc_clean$albumin, res_mart), col = "blue")
+abline(h=0, lty=2)
+
+# 2. Deviance Residuals
+res_dev <- residuals(fit_std, type = "deviance")
+plot(res_dev, type = "h", main = "Deviance Residuals",
+     xlab = "Index", ylab = "Residuals")
+abline(h=c(-2,2), col="red", lty=2)
+
+```
+
+## 최종 결론
+
+1.  **유의한 변수**: 다변량 분석 결과 **Bilirubin, Protime, Age, Albumin, Edema** 등이 생존에 유의한 영향을 미치는 것으로 나타났다.
+2.  **영향의 방향**:
+      * **위험 요인 (HR \> 1)**: Age, Bilirubin, Protime, Edema (수치가 높을수록 위험)
+      * **보호 요인 (HR \< 1)**: Albumin (수치가 높을수록 위험 감소)
+3.  **모형 선택**: 일부 변수의 비례위험 가정 위배를 해결하기 위해 **확장 Cox 모형**을 적용하였으며, 이는 표준 모형 대비 개선된 적합도(낮은 AIC)를 보였다.
+
+
+[![View on GitHub](https://img.shields.io/badge/GitHub-Repository-blue?logo=github)](https://github.com/Taenyoung-Lee/assignments/blob/main/survival_analysis/week14_final/Survival_Analysis_Final_Assignment.rmd)
+
