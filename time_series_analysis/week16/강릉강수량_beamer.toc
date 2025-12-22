@@ -1,0 +1,7 @@
+\beamer@sectionintoc {1}{데이터 소개 및 탐색}{3}{0}{1}
+\beamer@sectionintoc {2}{ARIMA 시도와 한계}{9}{0}{2}
+\beamer@sectionintoc {3}{계절 더미 + SARMA로 시간상관 진단}{13}{0}{3}
+\beamer@sectionintoc {4}{Gamma GLM 채택 및 결과}{15}{0}{4}
+\beamer@sectionintoc {5}{Outlier 분석 및 2011년 이후 변화}{20}{0}{5}
+\beamer@sectionintoc {6}{강수 변화와 강원도 산불 데이터}{24}{0}{6}
+\beamer@sectionintoc {7}{결론(의의)}{26}{0}{7}

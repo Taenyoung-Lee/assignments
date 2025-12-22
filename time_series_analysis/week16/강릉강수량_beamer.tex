@@ -1,0 +1,474 @@
+
+% !TEX program = xelatex
+\documentclass[aspectratio=169,11pt]{beamer}
+
+% -------------------- Language / Fonts (Korean) --------------------
+% 권장 컴파일러: XeLaTeX (또는 LuaLaTeX)
+\usepackage{kotex}
+
+% -------------------- Packages --------------------
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{amsmath, amssymb, mathtools}
+\usepackage{bm}
+\usepackage{siunitx}
+\usepackage{multicol}
+\usepackage{array}
+\usepackage{hyperref}
+
+% -------------------- Theme --------------------
+\usetheme{Madrid}
+\setbeamertemplate{navigation symbols}{}
+\setbeamertemplate{footline}[frame number]
+
+% -------------------- Helpers --------------------
+% 그림 파일이 아직 없어도 컴파일 되도록 “자리 표시자”를 넣는 매크로
+\newcommand{\PlaceFig}[1]{%
+  \begin{center}
+    \fbox{\parbox[c][0.55\textheight][c]{0.92\linewidth}{%
+      \centering\Large \textbf{[그림 삽입]}\\[0.8em]
+      \normalsize #1\\[0.4em]
+      \small (나중에 \texttt{\textbackslash includegraphics}로 교체)
+    }}
+  \end{center}
+}
+
+\newcommand{\SmallVSpace}{\vspace{0.4em}}
+
+% -------------------- Metadata --------------------
+\title[강릉 강수량: ARIMA $\to$ Gamma GLM]{강릉 월별 강수량 분석\\ARIMA에서 Gamma GLM까지}
+\author{Taenyoung Lee}
+\institute{Department of Statistics, HUFS}
+\date{\today}
+
+\begin{document}
+
+% ==================================================
+% Title
+% ==================================================
+\begin{frame}
+  \titlepage
+\end{frame}
+
+\begin{frame}{발표 흐름}
+  \tableofcontents
+\end{frame}
+
+% ==================================================
+\section{데이터 소개 및 탐색}
+% ==================================================
+
+\begin{frame}{분석 목표}
+\begin{itemize}
+  \item 강릉 월별 강수량 시계열의 \textbf{계절성/시간의존성/분포 특성}을 진단
+  \item 초기 접근: \textbf{(Gaussian) ARIMA} 적합 $\Rightarrow$ 진단상 한계 확인
+  \item 계절 더미 + SARMA 로 자기상관 확인
+  \item 관측 분포(양의 연속형, 우측 긴 꼬리) 반영하여 \textbf{Gamma GLM} 선택
+  \item Gamma GLM 기반 \textbf{(표준화 deviance residual) outlier} 탐지
+  \item 2011년 기점 이후 \textbf{작은 강수 outlier 증가} 관찰 $\Rightarrow$ 산불 데이터와 함께 확인
+\end{itemize}
+\end{frame}
+
+\begin{frame}{데이터 개요}
+\begin{itemize}
+  \item 원자료: 강릉 강수량(월별로 집계)
+  \item 데이터 범위: 1998-01 ~ 2025-09, 관측치: 331
+  \item 전처리 요약
+  \begin{itemize}
+    \item 날짜 문자열(예: ``YYYY년 M월'') $\to$ \texttt{Date} 변환 후 월 시작일로 정렬
+    \item 월별 강수량 합계(\si{mm})로 집계
+    \item 파생변수: \texttt{month\_fac} (01월$\sim$12월), 시점 인덱스 \texttt{t}
+  \end{itemize}
+\end{itemize}
+
+\end{frame}
+
+\begin{frame}{원자료 탐색 1: 시계열 플롯}
+
+\begin{center}
+  \includegraphics[width=0.92\linewidth]{강릉강수량원자료.png}
+\end{center}
+
+
+\end{frame}
+
+\begin{frame}{원자료 탐색 2: 계절성(월별 분포)}
+\begin{center}
+  \includegraphics[width=0.92\linewidth]{강릉강수량월별.png}
+\end{center}
+\end{frame}
+
+\begin{frame}{원자료 탐색 3: 원자료 ACF}
+\begin{center}
+  \includegraphics[width=0.92\linewidth]{원자료acf.png}
+\end{center}
+\end{frame}
+
+\begin{frame}{데이터에서 예상되는 어려움}
+\begin{itemize}
+  \item 강수량은 일반적으로
+  \begin{itemize}
+    \item \textbf{0 또는 매우 작은 값}이 존재하고,
+    \item \textbf{우측 긴 꼬리(right-skew)}를 가짐.
+  \end{itemize}
+  \item 따라서 \textbf{정규 오차}를 기본 가정하는 시계열 모형(ARIMA)의 잔차 진단에서
+  정규성 위반이 자주 나타남.
+\end{itemize}
+\end{frame}
+
+% ==================================================
+\section{ARIMA 시도와 한계}
+% ==================================================
+
+\begin{frame}{ARIMA 접근}
+\begin{itemize}
+  \item 월별 강수량은 계절성이 강하고(연 주기), 시간의존성이 있을 수 있음
+
+  \item 목표: (1) 계절성 제거, (2) 자기상관 제거, (3) 잔차를 ``백색잡음''으로 만들기
+\end{itemize}
+\begin{block}{AIC 그리드 탐색}
+\begin{center}
+  \includegraphics[width=0.92\linewidth]{arimaaic.png}
+\end{center}
+
+\end{block}
+\begin{block}{선택 모형}
+\[
+\text{ARIMA}(2,0,2)\,(0,1,1)_{12},\qquad \texttt{include.mean = FALSE}
+\]
+\end{block}
+
+\end{frame}
+
+\begin{frame}{선택된 ARIMA 모형}
+
+\SmallVSpace
+
+\SmallVSpace
+\begin{block}{ARIMA 적합 결과}
+\begin{table}[h!]
+\centering
+\caption{ARIMA(2,0,2)(0,1,1)$_{12}$ Model Estimation Results}
+\label{tab:arima_results}
+\begin{tabular}{lcccc}
+\hline
+\textbf{Parameter} & \textbf{Estimate} & \textbf{S.E.} & \textbf{t-value} & \textbf{p-value} \\ \hline
+AR1 ($\phi_1$)   & 0.6359  & 0.0546 & 11.646 &  0.001 \\
+AR2 ($\phi_2$)   & -0.8962 & 0.0371 & -24.156 &  0.001 \\
+MA1 ($\theta_1$)  & -0.7236 & 0.0387 & -18.698 &  0.001 \\
+MA2 ($\theta_2$)  & 0.9589  & 0.0313 & 30.636 &  0.001 \\
+SMA1 ($\Theta_1$) & -0.9996 & 0.1223 & -8.173 &  0.001 \\ \hline
+
+\end{tabular}
+\end{table}
+\end{block}
+
+\begin{block}{Ljung-Box test}
+  \begin{itemize}
+    \item Q* = 15.224, df = 19, p-value = 0.7083
+    \item Model df: 5.   Total lags used: 24
+  \end{itemize}
+\end{block}
+\end{frame}
+
+\begin{frame}{ARIMA 진단: ``잔차 정규성'' 문제}
+\begin{itemize}
+  \item ARIMA 잔차에 대해 정규성 검정 결과
+  \begin{itemize}
+    \item Shapiro--Wilk: $p \approx 4.6\times 10^{-16}$
+    \item Jarque--Bera: $p \approx 0$
+    \item Anderson--Darling: $p \approx 1.5\times 10^{-18}$
+  \end{itemize}
+  \item 결론: \textbf{정규성 가정이 강하게 깨짐} $\Rightarrow$ Gaussian ARIMA로는 분포 특성 반영이 어려움
+\end{itemize}
+
+\begin{center}
+  \includegraphics[width=0.6\linewidth]{잔차acf.png}
+\end{center}
+\end{frame}
+
+\begin{frame}{ARIMA 요약: 한계}
+\begin{itemize}
+  \item 계절/자기상관 측면의 진단은 일정 수준 통과할 수 있어도,
+  \item 핵심 문제는 \textbf{강수량 자료의 분포(양의 값, 우측 꼬리)}와 \textbf{정규 오차 가정}의 불일치
+  \item 따라서 \textbf{분포를 바꾸는 방향}의 모형화가 필요
+\end{itemize}
+\end{frame}
+
+% ==================================================
+\section{계절 더미 + SARMA로 시간상관 진단}
+% ==================================================
+
+
+\begin{frame}{SARMA 적합 및 진단: ACF/Ljung--Box 결과}
+\begin{itemize}
+  \item 잔차 진단(ACF)
+
+  \item Ljung--Box 결과: X-squared = 16.142, df = 24, $p \approx 0.8$ 수준  \\ $\Rightarrow$
+  \textbf{잔차 자기상관이 유의하지 않음}
+\end{itemize}
+\begin{center}
+  \includegraphics[width=0.62\linewidth]{sarmaacf.png}
+\end{center}
+\end{frame}
+
+\begin{frame}{해석: ``시간상관''보다 ``분포''가 핵심}
+\begin{itemize}
+  \item 월 더미를 넣고 나면,
+  \begin{itemize}
+    \item 잔차에서 \textbf{자기상관이 크게 남지 않음} (ACF, Ljung--Box 통과)
+  \end{itemize}
+  \item 따라서 이후 접근은
+  \begin{itemize}
+    \item \textbf{강수량 분포를 더 잘 설명하는 모형}을 채택하는 것이 합리적
+  \end{itemize}
+\end{itemize}
+\end{frame}
+
+% ==================================================
+\section{Gamma GLM 채택 및 결과}
+% ==================================================
+
+\begin{frame}{왜 Gamma GLM인가?}
+\begin{itemize}
+  \item 강수량은 대표적인 \textbf{양의 연속형} + \textbf{우측 꼬리} 데이터
+  \item Gamma 분포는
+  \begin{itemize}
+    \item 지지집합이 $(0,\infty)$이고
+    \item (형상에 따라) 다양한 수준의 우측 비대칭을 표현 가능
+  \end{itemize}
+  \item 로그 링크를 쓰면 평균이 항상 양수:
+  \[
+    \mathbb{E}[Y_t \mid \text{month}=m] = \exp(\eta_m)
+  \]
+  \item Thom(1958), McKee et al.(1993), Husak et al.(2007), Martinez-Villalobos \& Neelin(2019) 등 gamma 분포를 강수량 분포로 사용
+\end{itemize}
+\end{frame}
+
+\begin{frame}{Gamma GLM 진단: 분포진단}
+\begin{center}
+  \includegraphics[width=0.42\linewidth]{gamma진단.png}
+\end{center}
+
+\begin{block}{검정결과}
+KS statistic: 0.04296419 
+KS test 결과:
+   1-mle-gamma 
+"not rejected" 
+\\
+Chi-square stat: 10.98144  df: 14  p: 0.6874933 
+\end{block}
+
+\end{frame}
+
+
+\begin{frame}{Gamma GLM 설정}
+\begin{block}{모형}
+\[
+Y_t \mid \text{month}=m \sim \mathrm{Gamma}(\mu_m,\phi),
+\qquad \log(\mu_m) = \beta_0 + \beta_m
+\]
+\end{block}
+\begin{itemize}
+  \item 구현: \texttt{glm(precip \textasciitilde month\_fac, family = Gamma(link="log"))}
+  \item 주의: Gamma는 0을 허용하지 않으므로 \texttt{precip > 0}만 사용
+\end{itemize}
+\end{frame}
+
+\begin{frame}{Gamma GLM 결과: 계수 요약}
+\small
+\begin{block}{추정 계수}
+\begin{center}
+\begin{tabular}{lrrrr}
+\toprule
+항 & Estimate & Std. Error & t value & p-value\\
+\midrule
+(Intercept) & 3.7613 & 0.1628 & 23.10 & $<2\times10^{-16}$\\
+02월 & 0.1936 & 0.2371 & 0.82 & 0.415\\
+03월 & 0.4129 & 0.2303 & 1.79 & 0.0739\\
+04월 & 0.6578 & 0.2303 & 2.86 & 0.00457\\
+05월 & 0.5304 & 0.2303 & 2.30 & 0.0219\\
+06월 & 0.9654 & 0.2303 & 4.19 & $3.59\times10^{-5}$\\
+07월 & 1.7521 & 0.2303 & 7.61 & $3.21\times10^{-13}$\\
+08월 & 1.9158 & 0.2303 & 8.32 & $2.67\times10^{-15}$\\
+09월 & 1.8154 & 0.2303 & 7.88 & $5.20\times10^{-14}$\\
+10월 & 1.0597 & 0.2324 & 4.56 & $7.34\times10^{-6}$\\
+11월 & 0.5305 & 0.2324 & 2.28 & 0.0231\\
+12월 & -0.1862 & 0.2347 & -0.79 & 0.428\\
+\bottomrule
+\end{tabular}
+\end{center}
+\end{block}
+
+% \SmallVSpace
+% \footnotesize
+% 해석 포인트: 1월 대비 각 월의 평균 강수량이 $\exp(\beta_m)$ 배 만큼 변함.
+\end{frame}
+
+% \begin{frame}{Gamma GLM 결과: 월별 평균(해석용)}
+% \small
+% \begin{itemize}
+%   \item 로그 링크이므로 월별 평균 추정치는
+%   \(
+%   \widehat{\mu}_m = \exp(\hat\beta_0 + \hat\beta_m)
+%   \)
+%   \item 추정 월평균(mm, \textbf{양수 강수만 기준})
+% \end{itemize}
+
+% \begin{center}
+% \begin{tabular}{lrrrrrrrr}
+% \toprule
+% 월 & 01 & 02 & 03 & 04 & 05 & 06 & 07 & 08\\
+% \midrule
+% $\widehat{\mu}_m$ & 43.0 & 52.2 & 65.0 & 83.0 & 73.1 & 112.9 & 248.0 & 292.1\\
+% \bottomrule
+% \end{tabular}
+
+% \vspace{0.5em}
+% \begin{tabular}{lrrrr}
+% \toprule
+% 월 & 09 & 10 & 11 & 12\\
+% \midrule
+% $\widehat{\mu}_m$ & 264.2 & 124.1 & 73.1 & 35.7\\
+% \bottomrule
+% \end{tabular}
+% \end{center}
+
+% \end{frame}
+
+\begin{frame}{Gamma GLM 진단: deviance residual}
+\begin{itemize}
+  \item 표준화 deviance residual:
+  \[
+  r^{(std)}_t = \frac{r^{(dev)}_t}{\sqrt{\hat\phi(1-h_t)}}
+  \]
+  \item 정규성 검정: Shapiro $p\approx0.31$, JB $p\approx0.11$, AD $p\approx0.33$
+  \item Ljung--Box(24 lag) : $p\approx0.80$ $\Rightarrow$ \textbf{자기상관 없음}
+\end{itemize}
+
+\begin{center}
+  \includegraphics[width=0.42\linewidth]{gammaresidual진단.png}
+\end{center}
+
+\end{frame}
+
+
+% ==================================================
+\section{Outlier 분석 및 2011년 이후 변화}
+% ==================================================
+
+\begin{frame}{Outlier 정의(양쪽 꼬리)}
+\begin{itemize}
+  \item 유의수준 $\alpha=0.05$ (양쪽 합)
+  \item 임계값: $z_{1-\alpha/2}\approx 1.96$
+  \item Outlier 판정:
+  \[
+  |r^{(std)}_t| > 1.96 \Rightarrow \text{Outlier}
+  \]
+  \item 부호 해석
+  \begin{itemize}
+    \item $r^{(std)}_t > 0$: 관측 강수량이 모델 기대보다 큼(HIGH)
+    \item $r^{(std)}_t < 0$: 관측 강수량이 모델 기대보다 작음(LOW)
+  \end{itemize}
+\end{itemize}
+\end{frame}
+
+\begin{frame}{대표 Outlier 예시}
+\small
+\begin{block}{$|r^{(std)}|$ 큰 순 정렬 결과 일부}
+\begin{center}
+\begin{tabular}{lrrrrl}
+\toprule
+date & precip & fitted\_glm & r\_dev & r\_dev\_std & type\\
+\midrule
+2005-12 & 0.1 & 35.7 & -3.12 & -3.70 & LOW\\
+2020-10 & 0.6 & 124.1 & -2.95 & -3.48 & LOW\\
+2002-11 & 0.4 & 73.1 & -2.90 & -3.43 & LOW\\
+2023-12 & 229.0 & 35.7 & 2.67 & 3.16 & HIGH\\
+2014-12 & 0.4 & 35.7 & -2.65 & -3.13 & LOW\\
+\bottomrule
+\end{tabular}
+\end{center}
+\end{block}
+
+% \footnotesize
+% (발표 팁) LOW outlier(예상보다 매우 적게 내린 달)가 눈에 띄는지 강조.
+\end{frame}
+
+\begin{frame}{Outlier 시계열 표시 + 2011년 기점}
+\begin{center}
+  \includegraphics[width=0.8\linewidth]{시계열이상치.png}
+\end{center}
+
+\begin{itemize}
+  \item 중간일(2011년 11월) 기준 outlier 개수: \textbf{이전 6개, 이후 11개}
+\end{itemize}
+\end{frame}
+
+\begin{frame}{해석: ``적은 강수 outlier'' 증가}
+\begin{itemize}
+  \item 관측 사실: 2011년 전/후로 ``예상보다 적게 내린 달''이 늘어남
+  \item 가능한 해석(가설)
+  \begin{itemize}
+    \item 지역 기후 패턴의 변화(가뭄/건조화)
+  \end{itemize}
+  \item 다음 단계: 이런 ``건조 시그널''이 실제 위험과 연동되는지 확인
+\end{itemize}
+\end{frame}
+
+% ==================================================
+\section{강수 변화와 강원도 산불 데이터}
+% ==================================================
+
+\begin{frame}{산불 데이터 소개(강원도 연도별 발생 횟수)}
+\begin{itemize}
+  \item 2001--2024년, 강원도 연도별 산불 발생 횟수(count)
+  \item 동일 기준선: 2011년 전/후(2001--2011 vs 2012--2024)
+  \item 요약
+  \begin{itemize}
+    \item 2001--2011 평균: 43.0, \quad 2012--2024 평균: 68.77
+  \end{itemize}
+\end{itemize}
+
+\begin{center}
+  \includegraphics[width=0.68\linewidth]{강원산불.png}
+\end{center}
+
+\end{frame}
+
+\begin{frame}{강수 outlier + 산불(막대) 동시 시각화}
+\begin{center}
+  \includegraphics[width=0.8\linewidth]{최종plot.png}
+\end{center}
+
+
+\begin{itemize}
+  \item 시각적으로 ``작은 강수 outlier 증가'' 시기와 ``산불 증가'' 시기를 함께 확인
+  \item 주의: 단순 시각화는 \textbf{인과를 의미하지 않음} (추가 분석 필요)
+\end{itemize}
+\end{frame}
+
+
+
+% ==================================================
+\section{결론(의의)}
+% ==================================================
+
+\begin{frame}{결론 및 의의}
+\begin{itemize}
+  \item ``시계열 분석''을 시작점으로 하되, 진단을 통해 \textbf{분포 기반 모형}으로 자연스럽게 전환
+  \item Gamma GLM은 강수량의 특성(양의 값, 우측 꼬리)을 반영하며 진단도 양호
+  \item 표준화 deviance residual로 outlier를 정의하여 기존 정규분포 기반 outlier 탐지 방법으로 탐지 불가능했던
+  \textbf{건조한 달}을 탐지 가능
+  \item 2011년 이후 LOW outlier 증가 관찰 $\Rightarrow$
+  산불 증가와의 연관 가능성을 제시
+\end{itemize}
+\end{frame}
+
+\begin{frame}{감사합니다}
+\begin{center}
+\Large Q \& A
+\end{center}
+\end{frame}
+
+\end{document}
