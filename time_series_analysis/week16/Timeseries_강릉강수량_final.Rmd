@@ -1,0 +1,598 @@
+---
+title: "강릉 강수량: ARIMA , Gamma GLM(계절더미) + deviance residual 이상치"
+output:
+  html_document:
+    theme: flatly
+    toc: true
+    toc_depth: 3
+    toc_float: true
+    code_folding: hide
+    number_sections: true
+    df_print: paged
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo       = TRUE,
+  warning    = FALSE,
+  message    = FALSE,
+  fig.align  = "center",
+  fig.width  = 7,
+  fig.height = 4
+)
+```
+
+# 0. 패키지
+
+```{r packages}
+pkg_vec <- c(
+  "readr","dplyr","lubridate","stringr",
+  "ggplot2","fitdistrplus","forecast",
+  "tseries","nortest","gridExtra"
+)
+
+for (p in pkg_vec) {
+  if (!requireNamespace(p, quietly = TRUE)) install.packages(p)
+}
+
+library(readr)
+library(dplyr)
+library(lubridate)
+library(stringr)
+library(ggplot2)
+library(fitdistrplus)
+library(forecast)
+library(tseries)
+library(nortest)
+
+theme_set(
+  theme_minimal(base_size = 13) +
+    theme(
+      plot.title       = element_text(face = "bold", hjust = 0.5),
+      plot.subtitle    = element_text(hjust = 0.5),
+      panel.grid.minor = element_blank()
+    )
+)
+```
+
+# 1. 데이터 불러오기 및 월별 집계
+
+```{r data-import}
+#### 1) 파일 경로 -----------------------------------------------------------
+in_path <- "C:/Users/Tae/Downloads/강릉강수량_s.csv"  # <- 본인 경로로 수정
+
+#### 2) CSV 읽기 (EUC-KR) ---------------------------------------------------
+df_raw <- readr::read_csv(
+  file   = in_path,
+  locale = locale(encoding = "EUC-KR"),
+  show_col_types = FALSE
+)
+
+#### 3) 열 매핑: 날짜/일시 열, 강수량 열 -----------------------------------
+date_candidates <- c("일시","날짜","date","DATE","Date")
+prec_candidates <- c("강수량(mm)","강수량","precip","rain")
+
+date_col <- intersect(date_candidates, names(df_raw))[1]
+prec_col <- intersect(prec_candidates, names(df_raw))[1]
+
+if (is.na(date_col)) stop("날짜/일시 열을 찾지 못했습니다. (예: '일시','날짜','date')")
+if (is.na(prec_col)) stop("강수량 열을 찾지 못했습니다. (예: '강수량(mm)','강수량','precip')")
+
+df <- df_raw %>%
+  dplyr::rename(
+    datetime_kr = !!date_col,
+    precip_raw  = !!prec_col
+  )
+
+#### 4) '1911년 10월' 형식 파서 --------------------------------------------
+parse_year_month_kr <- function(x) {
+  s <- trimws(as.character(x))
+  yr <- suppressWarnings(as.integer(stringr::str_match(s, "([0-9]{3,4})\\s*년")[,2]))
+  mo <- suppressWarnings(as.integer(stringr::str_match(s, "([0-9]{1,2})\\s*월")[,2]))
+  yr[is.na(yr) | yr < 0] <- NA_integer_
+  mo[is.na(mo) | mo < 1 | mo > 12] <- NA_integer_
+  out <- ifelse(!is.na(yr) & !is.na(mo), sprintf("%04d-%02d-01", yr, mo), NA_character_)
+  as.Date(out)
+}
+df$date <- parse_year_month_kr(df$datetime_kr)
+
+if (any(is.na(df$date))) {
+  warning(sprintf("날짜 변환 실패 %d건 (총 %d건)",
+                  sum(is.na(df$date)), nrow(df)))
+}
+
+#### 5) 강수량 숫자화 및 월별 집계 ------------------------------------------
+df <- df %>%
+  dplyr::mutate(precip = suppressWarnings(as.numeric(precip_raw))) %>%
+  dplyr::filter(!is.na(date), !is.na(precip)) %>%
+  dplyr::mutate(month_start = lubridate::floor_date(date, "month")) %>%
+  dplyr::group_by(month_start) %>%
+  dplyr::summarise(precip = sum(precip, na.rm = TRUE), .groups = "drop") %>%
+  dplyr::arrange(month_start) %>%
+  dplyr::rename(date = month_start) %>%
+  dplyr::mutate(
+    t         = seq_along(date),
+    month_num = lubridate::month(date),
+    month_fac = factor(month_num, levels = 1:12, labels = sprintf("%02d월", 1:12))
+  )
+
+stopifnot(nrow(df) > 0)
+
+cat(sprintf("데이터 범위: %s ~ %s, 관측치: %d\n",
+            format(min(df$date), "%Y-%m"),
+            format(max(df$date), "%Y-%m"),
+            nrow(df)))
+#cat("0mm 개수:", sum(df$precip == 0), "\n")
+```
+
+# 2. 원자료 탐색
+
+```{r raw-plots}
+p_ts <- ggplot(df, aes(x = date, y = precip)) +
+  geom_line(linewidth = 0.7) +
+  #geom_point(size = 0.8) +
+  labs(title = "강릉 월별 강수량(원자료)", x = "date", y = "precip (mm)")
+
+p_box <- ggplot(df, aes(x = month_fac, y = precip)) +
+  geom_boxplot(outlier.alpha = 0.5) +
+  labs(title = "월별 강수량 분포(계절성)", x = "month", y = "precip (mm)")
+
+p_ts
+p_box
+```
+```{r}
+start_year <- year(min(df$date)); start_mon <- month(min(df$date))
+end_year   <- year(max(df$date)); end_mon   <- month(max(df$date))
+
+y <- ts(df$precip,
+        start = c(start_year, start_mon),
+        end   = c(end_year,   end_mon),
+        frequency = 12)
+
+# 원시계열 ACF/PACF
+p_acf_orig  <- ggAcf(y, lag.max = 48) + ggtitle("ACF: 원자료 y")
+p_pacf_orig <- ggPacf(y, lag.max = 48) + ggtitle("PACF: 원자료 y")
+print(p_acf_orig); print(p_pacf_orig)
+```
+
+
+# 3. ARIMA: AIC 그리드 탐색 → 선택모형 적합 → 잔차 정규성 검정
+
+```{r arima-grid}
+# ts 생성(원자료 그대로 사용; 0 포함)
+y <- ts(
+  df$precip,
+  start = c(lubridate::year(min(df$date)), lubridate::month(min(df$date))),
+  frequency = 12
+)
+
+#### AIC 그리드 탐색 (p=0..3, q=0..3, P=0..2, Q=0..2) ------------------------
+grid <- expand.grid(p = 0:3, q = 0:3, P = 0:2, Q = 0:2, KEEP.OUT.ATTRS = FALSE) |>
+  dplyr::filter(!(p == 0 & q == 0 & P == 0 & Q == 0))
+
+get_aic <- function(p, q, P, Q, include_mean = TRUE) {
+  fit <- try(
+    forecast::Arima(
+      y,
+      order    = c(p, 0, q),
+      seasonal = list(order = c(P, 1, Q), period = 12),
+      include.mean = include_mean,
+      method   = "ML"
+    ),
+    silent = TRUE
+  )
+  if (inherits(fit, "try-error")) return(Inf)
+  AIC(fit)
+}
+
+grid$AIC <- apply(grid, 1, function(r)
+  get_aic(r[["p"]], r[["q"]], r[["P"]], r[["Q"]], include_mean = TRUE))
+
+grid_sorted <- grid |>
+  dplyr::arrange(AIC)
+
+head(grid_sorted, 5)
+```
+
+```{r arima-final}
+# 최종 선택 모형(사용자 선택; 절편 제외)
+fit_no_int <- forecast::Arima(
+  y,
+  order    = c(2, 0, 2),
+  seasonal = list(order = c(0, 1, 1), period = 12),
+  include.mean = FALSE,
+  method   = "ML"
+)
+
+fit_no_int
+
+# 잔차 정규성 검정(ARIMA)
+res_arima <- as.numeric(residuals(fit_no_int))
+
+p_sw <- shapiro.test(res_arima)$p.value
+p_jb <- tseries::jarque.bera.test(res_arima)$p.value
+p_ad <- nortest::ad.test(res_arima)$p.value
+
+cat("\n==== ARIMA 잔차 정규성 검정 p-value ===\n")
+cat("Shapiro-Wilk     :", p_sw, ifelse(p_sw < 0.05, " (기각)", " (기각X)"), "\n")
+cat("Jarque-Bera      :", p_jb, ifelse(p_jb < 0.05, " (기각)", " (기각X)"), "\n")
+cat("Anderson-Darling :", p_ad, ifelse(p_ad < 0.05, " (기각)", " (기각X)"), "\n")
+
+# 상관 진단(ARIMA)
+forecast::checkresiduals(fit_no_int)
+```
+
+
+## 계절더미 SARMA
+
+```{r sarma}
+#### 1) 계절 더미 변수 생성 ----------------------------------------------------
+# 12개월 전체의 평균을 각각 추정하기 위해 intercept를 제외한 더미 행렬 생성
+month_dummies <- model.matrix(~ month_fac - 1, data = df)
+colnames(month_dummies) <- levels(df$month_fac)
+
+#### 2) AIC 기반 최적 차수(p, q) 그리드 탐색 -----------------------------------
+grid_sarma <- expand.grid(p = 0:3, q = 0:3, KEEP.OUT.ATTRS = FALSE)
+
+grid_sarma$AIC <- mapply(function(p, q) {
+  fit <- try(
+    forecast::Arima(
+      y,
+      order = c(p, 0, q),
+      xreg = month_dummies,
+      include.mean = FALSE,   # ★ 핵심
+      method = "ML"
+    ),
+    silent = TRUE
+  )
+  if (inherits(fit, "try-error")) return(Inf)
+  AIC(fit)
+}, grid_sarma$p, grid_sarma$q)
+
+
+# AIC 기준 정렬 및 최적 차수 추출
+grid_sarma_sorted <- grid_sarma %>% dplyr::arrange(AIC)
+best_p_s <- grid_sarma_sorted$p[1]
+best_q_s <- grid_sarma_sorted$q[1]
+
+print(head(grid_sarma_sorted, 5))
+cat(sprintf("\n[선택 모형] SARMA(%d, 0, %d) + 계절 더미 (AIC=%.2f)\n", 
+            best_p_s, best_q_s, grid_sarma_sorted$AIC[1]))
+
+#### 3) 최적 모형 적합 ---------------------------------------------------------
+fit_sarma_best <- forecast::Arima(
+  y,
+  order = c(best_p_s, 0, best_q_s),
+  xreg = month_dummies,
+  include.mean = FALSE,
+  method = "ML"
+)
+
+
+summary(fit_sarma_best)
+
+#### 4) 잔차 진단 및 ACF/PACF 시각화 -------------------------------------------
+# (1) 표준 진단 (Residuals, ACF, Histogram)
+forecast::checkresiduals(fit_sarma_best)
+
+# (2) 상세 ACF/PACF 그래프
+res_sarma <- residuals(fit_sarma_best)
+
+p_acf_res <- forecast::ggAcf(res_sarma, lag.max = 48) + 
+  labs(title = sprintf("ACF: SARMA(%d,0,%d) + Seasonal Dummies Residuals", best_p_s, best_q_s))
+
+p_pacf_res <- forecast::ggPacf(res_sarma, lag.max = 48) + 
+  labs(title = sprintf("PACF: SARMA(%d,0,%d) + Seasonal Dummies Residuals", best_p_s, best_q_s))
+
+# 두 그래프 나란히 출력
+gridExtra::grid.arrange(p_acf_res, p_pacf_res, ncol = 1)
+
+#### 5) Ljung-Box 검정 결과 상세 출력 -----------------------------------------
+lb_test_sarma <- Box.test(res_sarma, lag = 24, type = "Ljung-Box")
+cat("\n==== Ljung-Box Test (Lag=24) ====\n")
+print(lb_test_sarma)
+cat(ifelse(lb_test_sarma$p.value > 0.05, 
+    "결론: 잔차에 자기상관성이 없습니다 (White Noise).", 
+    "결론: 잔차에 여전히 자기상관성이 남아있습니다. 차수 추가 검토 필요."), "\n")
+```
+
+
+# 4. Gamma 분포 적합 및 GOF
+
+> 참고문헌 메모(보고서/발표용): 강수량에 Gamma가 널리 쓰였다는 근거로  
+> Thom(1958), McKee et al.(1993, SPI), Husak et al.(2007), Martinez-Villalobos & Neelin(2019) 등을 인용 가능.
+
+```{r gamma-fit}
+y_all <- df$precip
+y_pos <- y_all[y_all > 0]  # 0 제외(요청)
+
+cat("양수 관측치:", length(y_pos), "\n")
+
+fit_gamma <- fitdistrplus::fitdist(y_pos, "gamma")
+cat("\n==== Gamma 분포 적합(MLE) 결과 ====\n")
+fit_gamma
+
+gof_gamma <- fitdistrplus::gofstat(fit_gamma)
+cat("\n==== Gamma 분포 GOF 통계량(기본) ====\n")
+cat("KS statistic:", gof_gamma$ks, "\n")
+cat("KS test 결과:\n"); print(gof_gamma$kstest)
+cat("CVM:", gof_gamma$cvm, "\n")
+cat("AD :", gof_gamma$ad, "\n")
+cat("Chi-square stat:", gof_gamma$chisq, " df:", gof_gamma$chisqdf, " p:", gof_gamma$chisqpvalue, "\n")
+cat("AIC:", gof_gamma$aic, " BIC:", gof_gamma$bic, "\n")
+
+cat("\n==== Chi-square 도수표(일부) ====\n")
+print(head(gof_gamma$chisqtable, 10))
+```
+
+```{r gamma-diagnostic-plots, fig.width=7, fig.height=6}
+par(mfrow = c(2, 2))
+plot(fit_gamma)  # hist+dens, QQ, CDF, P-P
+par(mfrow = c(1, 1))
+```
+
+# 5. Gamma GLM(계절 더미) 적합 + deviance residual(양쪽 꼬리) 이상치
+
+```{r gamma-glm-fit}
+df_pos <- df %>%
+  dplyr::filter(precip > 0) %>%
+  dplyr::arrange(date)
+
+fit_gamma_glm <- glm(
+  precip ~ month_fac,                 
+  family = Gamma(link = "log"),
+  data   = df_pos
+)
+
+cat("\n==== Gamma GLM(계절 더미) 요약 ====\n")
+print(summary(fit_gamma_glm))
+```
+
+## 5-1. deviance residual 계산 및 진단
+
+```{r glm-residuals, fig.width=7, fig.height=6}
+# deviance residual
+r_dev <- residuals(fit_gamma_glm, type = "deviance")
+
+
+h   <- hatvalues(fit_gamma_glm)
+phi <- summary(fit_gamma_glm)$dispersion
+r_dev_std <- as.numeric(r_dev) / sqrt(phi * (1 - h))
+
+cat("\n==== 표준화 deviance residual 정규성 검정 ====\n")
+cat("Shapiro p :", shapiro.test(r_dev_std)$p.value, "\n")
+cat("JB p      :", tseries::jarque.bera.test(r_dev_std)$p.value, "\n")
+cat("AD p      :", nortest::ad.test(r_dev_std)$p.value, "\n")
+
+
+cat("\n==== 표준화 deviance residual Ljung-Box(자기상관) ====\n")
+print(Box.test(r_dev_std, lag = 24, type = "Ljung-Box"))
+
+par(mfrow = c(2,2))
+plot(df_pos$date, r_dev_std, type = "l",
+     main = "Std deviance residual vs time",
+     xlab = "date", ylab = "r_dev_std")
+abline(h = 0, col = "gray", lty = 2)
+
+acf(r_dev_std, main = "ACF of r_dev_std")
+
+qqnorm(r_dev_std, main = "QQ plot: r_dev_std")
+qqline(r_dev_std)
+
+hist(r_dev_std, breaks = 30, main = "Histogram: r_dev_std", xlab = "r_dev_std")
+par(mfrow = c(1,1))
+```
+
+## 5-2. 양쪽 꼬리 이상치 정의 및 원 시계열 표시
+
+```{r glm-outliers}
+alpha_total <- 0.05               # 양쪽 합 
+z_thr <- qnorm(1 - alpha_total/2)
+
+df_pos_out <- df_pos %>%
+  dplyr::mutate(
+    fitted_glm = fitted(fit_gamma_glm),  # 원 단위(mm)에서의 평균
+    r_dev      = as.numeric(r_dev),
+    r_dev_std  = r_dev_std,
+    flag_lo    = (r_dev_std < -z_thr),
+    flag_hi    = (r_dev_std >  z_thr),
+    flag_any   = flag_lo | flag_hi,
+    out_type   = dplyr::case_when(
+      flag_hi ~ "HIGH",
+      flag_lo ~ "LOW",
+      TRUE    ~ "OK"
+    )
+  )
+
+cat("\n==== Outlier (|r_dev_std| 큰 순) ====\n")
+print(
+  df_pos_out %>%
+    dplyr::arrange(desc(abs(r_dev_std))) %>%
+    dplyr::select(date, precip, fitted_glm, r_dev, r_dev_std, out_type) 
+)
+
+# 원 시계열 플롯
+ggplot(df_pos_out, aes(x = date, y = precip)) +
+  geom_line(linewidth = 0.8) +
+  #geom_point(size = 1.2) +
+  #geom_line(aes(y = fitted_glm), linetype = "dashed", linewidth = 0.8) +
+  geom_point(
+    data = df_pos_out %>% dplyr::filter(flag_any),
+    aes(color = out_type),
+    size = 3.2
+  ) +
+  scale_color_manual(
+    values = c("HIGH" = "red", "LOW" = "blue")
+  ) +
+  labs(
+    title = "Gamma GLM(계절 더미) + 표준화 deviance residual 이상치",
+    subtitle = paste0(
+      "two-sided α=", alpha_total,
+      "  (|r_dev_std| > ", round(z_thr, 3), ")"
+    ),
+    x = "date", y = "강수량 (mm)",
+    color = "Outlier"
+  )
+```
+
+***중간 일(2011년 11월) 기준***
+
+**이전 : 6 개**
+**이후 : 11  개**
+
+## 강수 변화와 강원도 산불 추이
+
+```{r gangwonmountainfire}
+# ---- 강원도 연도별 산불 발생횟수 데이터 ----
+fire_gw <- tibble::tibble(
+  year  = 2001:2024,
+  count = c(86, 52, 11, 57, 41, 30, 26, 25, 60, 46, 39, 44,
+            36, 73, 125, 91, 103, 47, 78, 74, 49, 78, 66, 30)
+) %>%
+  dplyr::mutate(
+    period = dplyr::if_else(year <= 2011, "2001~2011", "2012~2024")
+  )
+
+# 전/후 요약(수치 확인용)
+fire_sum <- fire_gw %>%
+  dplyr::group_by(period) %>%
+  dplyr::summarise(
+    n = dplyr::n(),
+    mean = mean(count),
+    median = median(count),
+    sd = sd(count),
+    .groups = "drop"
+  )
+
+fire_sum
+
+```
+
+
+```{r}
+# 전/후 평균(그래프에 선으로 표시하려고 숫자만 뽑음)
+m_pre  <- fire_sum$mean[fire_sum$period == "2001~2011"]
+m_post <- fire_sum$mean[fire_sum$period == "2012~2024"]
+
+ggplot(fire_gw, aes(x = year, y = count)) +
+  geom_line(linewidth = 0.8) +
+  geom_point(aes(shape = period), size = 2.6) +
+
+  # 2011년 기점 표시 (보기 좋게 2011과 2012 사이에 선을 긋는 느낌)
+  geom_vline(xintercept = 2011.5, linetype = "dashed") +
+
+  # 전/후 평균선(구간별)
+  geom_segment(aes(x = 2001, xend = 2011, y = m_pre,  yend = m_pre),
+               linewidth = 1.0, linetype = "solid") +
+  geom_segment(aes(x = 2012, xend = 2024, y = m_post, yend = m_post),
+               linewidth = 1.0, linetype = "solid") +
+
+  scale_x_continuous(breaks = seq(2001, 2024, by = 1)) +
+  labs(
+    title = "강원도 연도별 산불 발생횟수 (2011년 기점 전/후 비교)",
+    subtitle = "점선: 2011년 기점 / 실선: 전·후 평균 / 색 추세선: 전·후 선형추세(lm)",
+    x = "연도", y = "산불 발생횟수"
+  ) +
+  theme_minimal(base_size = 13) +
+  theme(axis.text.x = element_text(angle = 60, hjust = 1))
+
+```
+
+
+```{r mountainfireplusoutlier}
+
+# 1) 강원도 연도별 산불 발생횟수
+fire_gw <- tibble::tibble(
+  year  = 2001:2024,
+  fire  = c(86, 52, 11, 57, 41, 30, 26, 25, 60, 46, 39, 44,
+            36, 73, 125, 91, 103, 47, 78, 74, 49, 78, 66, 30),
+  date_mid = as.Date(sprintf("%d-07-01", year))  # 막대를 연도 중앙쯤에 놓기
+)
+
+# 2) "2011 전/후" 경계선 (2012-01-01에 긋는 게 가장 자연스러움)
+cut_date <- as.Date("2012-01-01")
+
+# 3) 산불 막대를 강수(mm) 스케일로 변환 (sec.axis로 다시 되돌려 읽게 함)
+#    - 막대가 너무 커서 선을 가리지 않게, 강수 최대치의 30% 높이에 맞춤
+y_max   <- max(df_pos_out$precip, na.rm = TRUE) * 1.05
+max_fire <- max(fire_gw$fire, na.rm = TRUE)
+
+scale_k <- (0.60 * y_max) / max_fire   # 산불 1회가 mm축에서 얼마로 보일지
+fire_gw <- fire_gw %>%
+  dplyr::mutate(fire_scaled = fire * scale_k)
+
+# 4) (선택) 2011 전/후 산불 평균선도 같이 표시하고 싶으면
+fire_mean <- fire_gw %>%
+  dplyr::mutate(period = ifelse(year <= 2011, "pre", "post")) %>%
+  dplyr::group_by(period) %>%
+  dplyr::summarise(m_fire = mean(fire), .groups = "drop") %>%
+  dplyr::mutate(m_fire_scaled = m_fire * scale_k)
+
+m_pre  <- fire_mean$m_fire_scaled[fire_mean$period == "pre"]
+m_post <- fire_mean$m_fire_scaled[fire_mean$period == "post"]
+
+# 5) 최종 플롯
+ggplot() +
+  # (A) 산불 막대: 배경에 깔기 (투명도 주기)
+  geom_col(
+    data = fire_gw,
+    aes(x = date_mid, y = fire_scaled),
+    width = 300,
+     fill = "grey55",
+  color = "grey25",
+  linewidth = 0.25,
+  alpha = 0.45
+  ) +
+
+  # (B) 강수 선 + outlier 점(기존 플롯 그대로)
+  geom_line(
+    data = df_pos_out,
+    aes(x = date, y = precip),
+    linewidth = 0.7
+  ) +
+  geom_point(
+    data = df_pos_out %>% dplyr::filter(flag_any),
+    aes(x = date, y = precip, color = out_type),
+    size = 3.2
+  ) +
+  scale_color_manual(values = c("HIGH" = "red", "LOW" = "blue")) +
+
+  # (C) 2011 전/후 경계선
+  geom_vline(xintercept = cut_date, linetype = "dashed") +
+
+
+  # (D) 산불 전/후 평균선(좌측축 스케일로 그려짐)  --- 색/두께/선종류 추가
+geom_segment(aes(x = as.Date("2001-01-01"), xend = as.Date("2011-12-31"),
+                 y = m_pre, yend = m_pre),
+             linewidth = 1.2, linetype = "longdash",
+             color = "orange3") +
+
+geom_segment(aes(x = as.Date("2012-01-01"), xend = as.Date("2024-12-31"),
+                 y = m_post, yend = m_post),
+             linewidth = 1.2, linetype = "longdash",
+             color = "dodgerblue4") +
+
+
+  # (E) 축: 왼쪽은 강수(mm), 오른쪽은 산불횟수로 읽기
+  scale_y_continuous(
+    name = "강수량 (mm)  [선 + outlier 점]",
+    limits = c(0, y_max),
+    sec.axis = sec_axis(
+      trans = ~ . / scale_k,
+      name = "강원도 산불 발생횟수 (연도별)  [막대]"
+    )
+  ) +
+  labs(
+    title = "월별 강수(Outlier) + 연도별 산불(막대) 동시 시각화",
+    subtitle = "점선은 2011 전/후 경계(2012-01-01).",
+    x = "date",
+    color = "Outlier"
+  ) +
+  theme_minimal(base_size = 13) +
+  theme(
+    axis.title.y.right = element_text(margin = margin(l = 10))
+  )
+
+```
+
+
